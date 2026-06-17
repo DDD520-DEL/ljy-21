@@ -55,7 +55,7 @@ export default function ProjectLayout() {
               </div>
             </div>
             <span
-              className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium bg-white/15 backdrop-blur border border-white/20 ${PROJECT_STATUS_COLOR[project.status]}`}
+              className={`inline-flex items-center px-4 py-1.5 rounded-full text-sm font-medium border ${PROJECT_STATUS_COLOR[project.status]}`}
             >
               {PROJECT_STATUS_LABEL[project.status]}
             </span>

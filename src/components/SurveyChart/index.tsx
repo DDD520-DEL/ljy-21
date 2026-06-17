@@ -27,6 +27,7 @@ export default function SurveyChart({ project }: SurveyChartProps) {
     totalHouseholds > 0
       ? Math.round((totalSigned / totalHouseholds) * 100)
       : 0;
+  const thresholdPercent = (2 / 3) * 100;
 
   const circumference = 2 * Math.PI * 60;
   const dashOffset = circumference - (signRate / 100) * circumference;
@@ -133,11 +134,11 @@ export default function SurveyChart({ project }: SurveyChartProps) {
           </div>
           <div className="mt-2 h-3 bg-white rounded-full overflow-hidden relative">
             <div className="absolute inset-y-0 left-0 bg-green-500 transition-all duration-500" style={{ width: `${agreeRate}%` }} />
-            <div className="absolute inset-y-0 w-0.5 bg-amber-500" style={{ left: '66.7%' }} />
+            <div className="absolute inset-y-0 w-0.5 bg-amber-500" style={{ left: `${thresholdPercent}%` }} />
           </div>
           <div className="flex items-center justify-between mt-1.5 text-xs">
             <span className="text-green-700 font-medium">当前 {agreeRate}%</span>
-            <span className="text-amber-600">达标线 66.7%</span>
+            <span className="text-amber-600">达标线 2/3（{thresholdPercent.toFixed(1)}%）</span>
           </div>
         </div>
       </div>

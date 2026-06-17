@@ -191,7 +191,7 @@ export default function ProjectOverview() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-green-600 font-medium">同意率 {agreeRate}%</span>
-                <span className="text-slate-400 text-xs">法定门槛 66.7%</span>
+                <span className="text-slate-400 text-xs">法定门槛 2/3</span>
               </div>
             </div>
           </Link>

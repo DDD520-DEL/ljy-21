@@ -41,12 +41,12 @@ export default function SurveyPage() {
       reason,
     });
 
+    const totalHouseholds = project.households.length;
     const agreeCount = project.surveyResponses.filter(
       (r) => r.opinion === 'agree'
     ).length + (selectedOpinion === 'agree' ? 1 : 0);
-    const agreeRate = (agreeCount / project.households.length) * 100;
 
-    if (agreeRate >= 66.7 && project.status === 'surveying') {
+    if (agreeCount * 3 >= totalHouseholds * 2 && project.status === 'surveying') {
       updateProjectStatus(project.id, 'approved');
     }
 

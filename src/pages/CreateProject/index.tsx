@@ -1,12 +1,30 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Trash2, Building2, Users, Calculator, CheckCircle2, MapPin, Home, DollarSign, FileText
+  ArrowLeft, Plus, Trash2, Building2, Users, Calculator, CheckCircle2, MapPin, Home, DollarSign, FileText, AlertCircle
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { calculateShareRatio, formatCurrency } from '@/utils/feeCalculator';
 import type { Household } from '@/types';
 import { maskName } from '@/utils/maskData';
+
+function validatePhone(phone: string): boolean {
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 0) return true;
+  if (cleaned.length === 11 && /^1[3-9]\d{9}$/.test(cleaned)) {
+    return true;
+  }
+  if (cleaned.length >= 7 && cleaned.length <= 12) {
+    return true;
+  }
+  return false;
+}
+
+function formatPhoneDisplay(phone: string): string {
+  if (!phone) return '';
+  if (phone.includes('*')) return phone;
+  return phone;
+}
 
 const STEPS = [
   { key: 'basic', label: '基本信息', icon: FileText },
@@ -70,13 +88,20 @@ export default function CreateProject() {
     setHouseholds(households.filter((_, i) => i !== index));
   };
 
+  const phoneErrors = useMemo(() => {
+    return households.map((h) => {
+      if (!h.phone.trim()) return true;
+      return validatePhone(h.phone);
+    });
+  }, [households]);
+
   const canProceed = () => {
     if (currentStep === 'basic') {
       return name.trim() && address.trim() && totalFloors > 0 && totalCost > 0;
     }
     if (currentStep === 'households') {
       return households.every(
-        (h) => h.floor > 0 && h.unit && h.area > 0 && h.ownerName
+        (h, idx) => h.floor > 0 && h.unit && h.area > 0 && h.ownerName && phoneErrors[idx]
       );
     }
     return true;
@@ -302,11 +327,21 @@ export default function CreateProject() {
                     <label className="text-xs text-slate-500 mb-1 block">电话</label>
                     <input
                       type="tel"
-                      value={h.phone}
+                      value={formatPhoneDisplay(h.phone)}
                       onChange={(e) => updateHousehold(idx, 'phone', e.target.value)}
-                      className="input-field !py-2 text-sm"
+                      className={`input-field !py-2 text-sm ${
+                        !phoneErrors[idx] && h.phone.trim()
+                          ? '!border-red-400 !ring-red-200 focus:!ring-red-400'
+                          : ''
+                      }`}
                       placeholder="手机号"
                     />
+                    {!phoneErrors[idx] && h.phone.trim() && (
+                      <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        请输入有效的手机号码（11位）或座机号（7-12位）
+                      </p>
+                    )}
                   </div>
                   <div className="col-span-1 flex items-end justify-center pb-1">
                     <button
