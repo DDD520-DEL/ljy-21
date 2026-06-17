@@ -5,11 +5,11 @@ import type {
   SurveyResponse,
   ProgressNode,
   MediaFile,
-  OpinionType,
   ProjectStatus,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST } from '@/types';
+import { calculateShareRatio } from '@/utils/feeCalculator';
 
 const STORAGE_KEY = 'elevator_projects';
 
@@ -19,6 +19,12 @@ interface HouseholdInput {
   area: number;
   ownerName: string;
   phone: string;
+}
+
+interface ImportHouseholdResult {
+  successCount: number;
+  failCount: number;
+  errors: { rowNumber: number; errors: string[] }[];
 }
 
 interface ProjectStore {
@@ -34,6 +40,7 @@ interface ProjectStore {
     totalCost: number;
     households: HouseholdInput[];
   }) => string;
+  importHouseholds: (projectId: string, households: HouseholdInput[]) => ImportHouseholdResult;
   updateProjectStatus: (id: string, status: ProjectStatus) => void;
 
   addSurveyResponse: (projectId: string, response: Omit<SurveyResponse, 'id' | 'projectId' | 'signedAt'>) => void;
@@ -189,5 +196,48 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     });
     set({ projects });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  importHouseholds: (projectId, householdInputs) => {
+    let successCount = 0;
+    const errors: { rowNumber: number; errors: string[] }[] = [];
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const householdsWithIds: Omit<Household, 'shareRatio' | 'shareAmount'>[] = householdInputs.map(
+          (h, idx) => ({
+            ...h,
+            id: `h-${projectId}-import-${idx}`,
+            projectId,
+          })
+        );
+
+        const calculatedHouseholds = calculateShareRatio(
+          householdsWithIds,
+          p.totalCost
+        );
+
+        const existingIds = new Set(p.households.map((h) => h.id));
+        const newHouseholds = calculatedHouseholds.filter(
+          (h) => !existingIds.has(h.id)
+        );
+
+        successCount = newHouseholds.length;
+
+        const mergedHouseholds = [...p.households, ...newHouseholds];
+
+        return { ...p, households: mergedHouseholds };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return {
+      successCount,
+      failCount: householdInputs.length - successCount,
+      errors,
+    };
   },
 }));

@@ -1,12 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Trash2, Building2, Users, Calculator, CheckCircle2, MapPin, Home, DollarSign, FileText, AlertCircle
+  ArrowLeft, Plus, Trash2, Building2, Users, Calculator, CheckCircle2, MapPin, Home, DollarSign, FileText, AlertCircle, Upload, Download, X, Check, AlertTriangle
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { calculateShareRatio, formatCurrency } from '@/utils/feeCalculator';
 import type { Household } from '@/types';
 import { maskName } from '@/utils/maskData';
+import { parseExcelFile, generateExcelTemplate } from '@/utils/excelImporter';
+import type { ImportResult } from '@/utils/excelImporter';
 
 function validatePhone(phone: string): boolean {
   const cleaned = phone.replace(/\D/g, '');
@@ -59,6 +61,12 @@ export default function CreateProject() {
     { floor: 2, unit: '202', area: 85, ownerName: '赵**', phone: '138****8004' },
   ]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [showImportPreview, setShowImportPreview] = useState(false);
+
   const calculatedHouseholds: Household[] = calculateShareRatio(
     households.map((h, idx) => ({
       ...h,
@@ -86,6 +94,55 @@ export default function CreateProject() {
 
   const removeHousehold = (index: number) => {
     setHouseholds(households.filter((_, i) => i !== index));
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportError(null);
+    setImportResult(null);
+
+    try {
+      const result = await parseExcelFile(file);
+      setImportResult(result);
+      setShowImportPreview(true);
+    } catch (err) {
+      setImportError((err as Error).message);
+    } finally {
+      setIsImporting(false);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmImport = () => {
+    if (!importResult) return;
+
+    const newHouseholds: HouseholdForm[] = importResult.validRows.map((row) => ({
+      floor: row.floor,
+      unit: row.unit,
+      area: row.area,
+      ownerName: row.ownerName,
+      phone: row.phone,
+    }));
+
+    setHouseholds((prev) => [...prev, ...newHouseholds]);
+    setShowImportPreview(false);
+    setImportResult(null);
+  };
+
+  const handleCancelImport = () => {
+    setShowImportPreview(false);
+    setImportResult(null);
+    setImportError(null);
+  };
+
+  const handleDownloadTemplate = () => {
+    generateExcelTemplate();
   };
 
   const phoneErrors = useMemo(() => {
@@ -260,18 +317,55 @@ export default function CreateProject() {
 
         {currentStep === 'households' && (
           <div className="space-y-5 animate-fade-in">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <h3 className="font-medium text-slate-700">
                 住户列表（{households.length} 户）
               </h3>
-              <button
-                onClick={addHousehold}
-                className="btn-secondary !py-2 !px-4 text-sm inline-flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                添加住户
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadTemplate}
+                  className="btn-secondary !py-2 !px-4 text-sm inline-flex items-center gap-1.5"
+                >
+                  <Download className="w-4 h-4" />
+                  下载模板
+                </button>
+                <label className="btn-primary !py-2 !px-4 text-sm inline-flex items-center gap-1.5 cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  批量导入
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </label>
+                <button
+                  onClick={addHousehold}
+                  className="btn-secondary !py-2 !px-4 text-sm inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-4 h-4" />
+                  添加住户
+                </button>
+              </div>
             </div>
+
+            {importError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-red-800">导入失败</p>
+                  <p className="text-sm text-red-600">{importError}</p>
+                </div>
+              </div>
+            )}
+
+            {isImporting && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-blue-700">正在解析 Excel 文件...</p>
+              </div>
+            )}
 
             <div className="space-y-3 max-h-[500px] overflow-y-auto scrollbar-thin pr-2">
               {households.map((h, idx) => (
@@ -354,6 +448,162 @@ export default function CreateProject() {
                 </div>
               ))}
             </div>
+
+            {showImportPreview && importResult && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                  <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">导入数据预览</h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                        共解析 {importResult.totalRows} 行数据，
+                        <span className="text-green-600 font-medium">
+                          有效 {importResult.validRows.length} 行
+                        </span>
+                        ，
+                        <span className="text-red-600 font-medium">
+                          无效 {importResult.invalidRows.length} 行
+                        </span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleCancelImport}
+                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                  </div>
+
+                  {importResult.invalidRows.length > 0 && (
+                    <div className="p-4 bg-amber-50 border-b border-amber-200">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-amber-800 mb-2">
+                            以下行存在格式错误，将被跳过：
+                          </p>
+                          <div className="max-h-32 overflow-y-auto space-y-1.5">
+                            {importResult.invalidRows.map((row) => (
+                              <div
+                                key={row.rowNumber}
+                                className="text-sm text-amber-700 bg-amber-100/50 px-3 py-2 rounded"
+                              >
+                                <span className="font-medium">第 {row.rowNumber} 行：</span>
+                                {row.errors.join('；')}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex-1 overflow-auto p-6">
+                    {(() => {
+                      const combinedHouseholds = [
+                        ...households,
+                        ...importResult.validRows.map((r) => ({
+                          floor: r.floor,
+                          unit: r.unit,
+                          area: r.area,
+                          ownerName: r.ownerName,
+                          phone: r.phone,
+                        })),
+                      ];
+
+                      const calculated = calculateShareRatio(
+                        combinedHouseholds.map((h, idx) => ({
+                          ...h,
+                          id: `temp-${idx}`,
+                          projectId: 'temp',
+                          shareRatio: 0,
+                          shareAmount: 0,
+                        })),
+                        totalCost
+                      );
+
+                      const newCalculated = calculated.slice(households.length);
+
+                      return (
+                        <>
+                          <div className="mb-4 p-4 bg-primary-50 rounded-lg border border-primary-100">
+                            <div className="flex items-start gap-2">
+                              <Calculator className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                              <div className="text-sm text-primary-700">
+                                <p className="font-medium mb-1">费用分摊预览</p>
+                                <p>
+                                  系统已根据楼层系数和房屋面积自动计算每户分摊金额。
+                                  导入后，所有住户（含已有住户）的分摊比例将重新计算。
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <p className="text-sm font-medium text-slate-700 mb-3">
+                            以下 {importResult.validRows.length} 行数据将被导入：
+                          </p>
+                          <div className="overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="w-full text-sm">
+                              <thead className="bg-slate-50">
+                                <tr>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-600">状态</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-600">行号</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-600">姓名</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-600">电话</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-600">楼层</th>
+                                  <th className="px-4 py-3 text-left font-medium text-slate-600">房号</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-600">面积</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-600">分摊比例</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-600">分摊金额</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {importResult.validRows.map((row, idx) => (
+                                  <tr key={idx} className="hover:bg-slate-50">
+                                    <td className="px-4 py-3">
+                                      <Check className="w-4 h-4 text-green-500" />
+                                    </td>
+                                    <td className="px-4 py-3 text-slate-500">{row.rowNumber}</td>
+                                    <td className="px-4 py-3 text-slate-700">{row.ownerName}</td>
+                                    <td className="px-4 py-3 text-slate-700">{row.phone}</td>
+                                    <td className="px-4 py-3 text-slate-700">{row.floor} 层</td>
+                                    <td className="px-4 py-3 text-slate-700">{row.unit}</td>
+                                    <td className="px-4 py-3 text-right text-slate-700">{row.area} ㎡</td>
+                                    <td className="px-4 py-3 text-right font-medium text-primary-700">
+                                      {newCalculated[idx]?.shareRatio.toFixed(2) || 0}%
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-bold text-amber-600">
+                                      {formatCurrency(newCalculated[idx]?.shareAmount || 0)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="p-6 border-t border-slate-200 flex items-center justify-end gap-3">
+                    <button
+                      onClick={handleCancelImport}
+                      className="btn-secondary"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleConfirmImport}
+                      className="btn-primary inline-flex items-center gap-1.5"
+                      disabled={importResult.validRows.length === 0}
+                    >
+                      <Check className="w-4 h-4" />
+                      确认导入 {importResult.validRows.length} 条数据
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
