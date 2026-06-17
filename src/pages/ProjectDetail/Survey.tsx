@@ -1,0 +1,435 @@
+import { useState } from 'react';
+import { useParams } from 'react-router-dom';
+import {
+  Vote,
+  ThumbsUp,
+  ThumbsDown,
+  MinusCircle,
+  Send,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
+import { useProjectStore } from '@/store/projectStore';
+import type { OpinionType } from '@/types';
+import { OPINION_LABEL, OPINION_COLOR } from '@/types';
+import { maskName } from '@/utils/maskData';
+import SurveyChart from '@/components/SurveyChart';
+
+export default function SurveyPage() {
+  const { id } = useParams<{ id: string }>();
+  const project = useProjectStore((s) => s.getProject(id || ''));
+  const addSurveyResponse = useProjectStore((s) => s.addSurveyResponse);
+  const updateProjectStatus = useProjectStore((s) => s.updateProjectStatus);
+
+  const [selectedHousehold, setSelectedHousehold] = useState<string | null>(null);
+  const [selectedOpinion, setSelectedOpinion] = useState<OpinionType | null>(null);
+  const [reason, setReason] = useState('');
+  const [showNames, setShowNames] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  if (!project) return null;
+
+  const handleSubmit = () => {
+    if (!selectedHousehold || !selectedOpinion) return;
+
+    addSurveyResponse(project.id, {
+      householdId: selectedHousehold,
+      opinion: selectedOpinion,
+      reason,
+    });
+
+    const agreeCount = project.surveyResponses.filter(
+      (r) => r.opinion === 'agree'
+    ).length + (selectedOpinion === 'agree' ? 1 : 0);
+    const agreeRate = (agreeCount / project.households.length) * 100;
+
+    if (agreeRate >= 66.7 && project.status === 'surveying') {
+      updateProjectStatus(project.id, 'approved');
+    }
+
+    setSelectedHousehold(null);
+    setSelectedOpinion(null);
+    setReason('');
+    setShowConfirm(false);
+  };
+
+  const startSurvey = () => {
+    if (project.status === 'draft') {
+      updateProjectStatus(project.id, 'surveying');
+    }
+  };
+
+  const totalHouseholds = project.households.length;
+  const signedCount = project.surveyResponses.length;
+  const signRate = totalHouseholds > 0 ? Math.round((signedCount / totalHouseholds) * 100) : 0;
+
+  const getResponseForHousehold = (householdId: string) =>
+    project.surveyResponses.find((r) => r.householdId === householdId);
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {project.status === 'draft' && (
+        <div className="card p-6 border-amber-300 bg-amber-50/50">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-slate-800 mb-1">
+                  尚未发起意见征询
+                </h3>
+                <p className="text-sm text-slate-600">
+                  确认住户信息和费用分摊方案无误后，正式发起意见征询
+                </p>
+              </div>
+            </div>
+            <button onClick={startSurvey} className="btn-primary">
+              发起意见征询
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="card p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
+            <Vote className="w-5 h-5 text-primary-600" />
+          </div>
+          <div>
+            <h3 className="font-serif text-lg font-bold text-slate-800">
+              征询进度概览
+            </h3>
+            <p className="text-sm text-slate-500">
+              实时更新，共 {totalHouseholds} 户，已签署 {signedCount} 户（{signRate}%）
+            </p>
+          </div>
+        </div>
+        <SurveyChart project={project} />
+      </div>
+
+      <div className="grid lg:grid-cols-5 gap-6">
+        <div className="lg:col-span-3 card p-6">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-serif text-lg font-bold text-slate-800">
+              各户签署情况
+            </h3>
+            <button
+              onClick={() => setShowNames(!showNames)}
+              className="btn-secondary !py-2 !px-4 text-sm inline-flex items-center gap-1.5"
+            >
+              {showNames ? (
+                <>
+                  <EyeOff className="w-4 h-4" /> 脱敏显示
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4" /> 查看实名
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="space-y-3 max-h-[600px] overflow-y-auto scrollbar-thin pr-2">
+            {project.households.map((household) => {
+              const response = getResponseForHousehold(household.id);
+              const isSelected = selectedHousehold === household.id;
+
+              return (
+                <div
+                  key={household.id}
+                  className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-primary-400 bg-primary-50'
+                      : response
+                      ? 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                      : 'border-slate-200 bg-white hover:border-primary-200 hover:bg-primary-50/30'
+                  }`}
+                  onClick={() => {
+                    if (project.status === 'surveying' && !response) {
+                      setSelectedHousehold(household.id);
+                    }
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                        <span className="font-bold text-slate-600">
+                          {household.floor}F
+                        </span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-medium text-slate-800">
+                            {household.unit} 室
+                          </span>
+                          <span className="text-slate-500">
+                            {showNames ? household.ownerName : maskName(household.ownerName)}
+                          </span>
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {household.area} ㎡ · 分摊 {household.shareRatio}%
+                        </div>
+                      </div>
+                    </div>
+
+                    {response ? (
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`badge border ${OPINION_COLOR[response.opinion]}`}
+                        >
+                          {OPINION_LABEL[response.opinion]}
+                        </span>
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {new Date(response.signedAt).toLocaleDateString('zh-CN')}
+                        </span>
+                      </div>
+                    ) : project.status === 'surveying' ? (
+                      <span className="badge bg-amber-50 text-amber-700 border border-amber-200">
+                        待签署
+                      </span>
+                    ) : (
+                      <span className="badge bg-slate-100 text-slate-500">
+                        未开始
+                      </span>
+                    )}
+                  </div>
+
+                  {response?.reason && (
+                    <div className="mt-3 pt-3 border-t border-slate-200 text-sm text-slate-600">
+                      <span className="text-slate-400 mr-2">理由：</span>
+                      {response.reason}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="lg:col-span-2">
+          <div className="card p-6 sticky top-8">
+            {selectedHousehold ? (
+              <>
+                <h3 className="font-serif text-lg font-bold text-slate-800 mb-4">
+                  签署意见
+                </h3>
+
+                <div className="mb-5 p-4 bg-slate-50 rounded-lg">
+                  {(() => {
+                    const h = project.households.find(
+                      (hh) => hh.id === selectedHousehold
+                    );
+                    if (!h) return null;
+                    return (
+                      <div className="text-sm">
+                        <p className="text-slate-500 mb-1">您正在以</p>
+                        <p className="font-semibold text-slate-800 text-base">
+                          {h.floor} 层 {h.unit} 室 · {maskName(h.ownerName)}
+                        </p>
+                        <p className="text-slate-500 mt-1">
+                          房屋面积 {h.area}㎡，分摊比例 {h.shareRatio}%
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="space-y-3 mb-5">
+                  <OpinionCard
+                    type="agree"
+                    selected={selectedOpinion === 'agree'}
+                    onClick={() => setSelectedOpinion('agree')}
+                  />
+                  <OpinionCard
+                    type="oppose"
+                    selected={selectedOpinion === 'oppose'}
+                    onClick={() => setSelectedOpinion('oppose')}
+                  />
+                  <OpinionCard
+                    type="abstain"
+                    selected={selectedOpinion === 'abstain'}
+                    onClick={() => setSelectedOpinion('abstain')}
+                  />
+                </div>
+
+                <div className="mb-5">
+                  <label className="label-field">意见理由（选填）</label>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="input-field min-h-[100px] resize-none"
+                    placeholder="请简要说明您的意见理由..."
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setSelectedHousehold(null);
+                      setSelectedOpinion(null);
+                      setReason('');
+                    }}
+                    className="btn-secondary flex-1"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => setShowConfirm(true)}
+                    disabled={!selectedOpinion}
+                    className="btn-primary flex-1 inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Send className="w-4 h-4" />
+                    提交意见
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <Vote className="w-8 h-8 text-slate-400" />
+                </div>
+                <h4 className="font-medium text-slate-700 mb-1">
+                  选择待签署住户
+                </h4>
+                <p className="text-sm text-slate-500">
+                  从左侧列表中选择您的房屋进行意见签署
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full animate-fade-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertCircle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800 text-lg">确认提交意见？</h4>
+                <p className="text-sm text-slate-500">意见一经提交不可修改</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 rounded-lg mb-5 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">您的意见</span>
+                <span
+                  className={`badge ${OPINION_COLOR[selectedOpinion!]}`}
+                >
+                  {OPINION_LABEL[selectedOpinion!]}
+                </span>
+              </div>
+              {reason && (
+                <div className="text-sm">
+                  <span className="text-slate-500">理由：</span>
+                  <span className="text-slate-700 ml-1">{reason}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="btn-secondary flex-1"
+              >
+                返回修改
+              </button>
+              <button onClick={handleSubmit} className="btn-primary flex-1">
+                确认提交
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OpinionCard({
+  type,
+  selected,
+  onClick,
+}: {
+  type: OpinionType;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const config = {
+    agree: {
+      icon: ThumbsUp,
+      label: '同意',
+      desc: '支持加装电梯方案',
+      color: 'green',
+    },
+    oppose: {
+      icon: ThumbsDown,
+      label: '反对',
+      desc: '对方案有异议',
+      color: 'red',
+    },
+    abstain: {
+      icon: MinusCircle,
+      label: '弃权',
+      desc: '暂不发表意见',
+      color: 'slate',
+    },
+  }[type];
+
+  const Icon = config.icon;
+
+  const selectedStyles = {
+    green: 'bg-green-50 border-green-400 ring-2 ring-green-200',
+    red: 'bg-red-50 border-red-400 ring-2 ring-red-200',
+    slate: 'bg-slate-100 border-slate-400 ring-2 ring-slate-200',
+  }[config.color];
+
+  const textColor = {
+    green: 'text-green-700',
+    red: 'text-red-700',
+    slate: 'text-slate-700',
+  }[config.color];
+
+  const iconBg = {
+    green: 'bg-green-100 text-green-600',
+    red: 'bg-red-100 text-red-600',
+    slate: 'bg-slate-200 text-slate-600',
+  }[config.color];
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full p-4 rounded-xl border-2 text-left transition-all ${
+        selected
+          ? selectedStyles
+          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconBg}`}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
+        <div className="flex-1">
+          <p className={`font-semibold ${textColor}`}>{config.label}</p>
+          <p className="text-sm text-slate-500">{config.desc}</p>
+        </div>
+        <div
+          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+            selected ? 'border-transparent bg-primary-600' : 'border-slate-300'
+          }`}
+        >
+          {selected && <CheckCircle2 className="w-4 h-4 text-white" />}
+        </div>
+      </div>
+    </button>
+  );
+}
