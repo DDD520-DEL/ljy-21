@@ -204,29 +204,36 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     const projects = get().projects.map((p) => {
       if (p.id === projectId) {
-        const householdsWithIds: Omit<Household, 'shareRatio' | 'shareAmount'>[] = householdInputs.map(
+        const newHouseholdsWithIds: Omit<Household, 'shareRatio' | 'shareAmount'>[] = householdInputs.map(
           (h, idx) => ({
             ...h,
-            id: `h-${projectId}-import-${idx}`,
+            id: `h-${projectId}-import-${idx}-${Date.now()}`,
             projectId,
           })
         );
 
-        const calculatedHouseholds = calculateShareRatio(
-          householdsWithIds,
+        successCount = newHouseholdsWithIds.length;
+
+        const existingHouseholds: Omit<Household, 'shareRatio' | 'shareAmount'>[] = p.households.map(
+          (h) => ({
+            id: h.id,
+            projectId: h.projectId,
+            floor: h.floor,
+            unit: h.unit,
+            area: h.area,
+            ownerName: h.ownerName,
+            phone: h.phone,
+          })
+        );
+
+        const allHouseholds = [...existingHouseholds, ...newHouseholdsWithIds];
+
+        const recalculatedHouseholds = calculateShareRatio(
+          allHouseholds,
           p.totalCost
         );
 
-        const existingIds = new Set(p.households.map((h) => h.id));
-        const newHouseholds = calculatedHouseholds.filter(
-          (h) => !existingIds.has(h.id)
-        );
-
-        successCount = newHouseholds.length;
-
-        const mergedHouseholds = [...p.households, ...newHouseholds];
-
-        return { ...p, households: mergedHouseholds };
+        return { ...p, households: recalculatedHouseholds };
       }
       return p;
     });
