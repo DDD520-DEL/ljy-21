@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import Home from '@/pages/Home';
@@ -6,9 +7,18 @@ import ProjectLayout from '@/pages/ProjectDetail/ProjectLayout';
 import ProjectOverview from '@/pages/ProjectDetail/Overview';
 import HouseholdsPage from '@/pages/ProjectDetail/Households';
 import SurveyPage from '@/pages/ProjectDetail/Survey';
+import FeedbacksPage from '@/pages/ProjectDetail/Feedbacks';
 import ProgressPage from '@/pages/ProjectDetail/Progress';
+import PublicationPage from '@/pages/Publication';
+import { useProjectStore } from '@/store/projectStore';
 
 export default function App() {
+  const initProjects = useProjectStore((s) => s.initProjects);
+
+  useEffect(() => {
+    initProjects();
+  }, [initProjects]);
+
   return (
     <Router>
       <Routes>
@@ -16,10 +26,12 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/projects/create" element={<CreateProject />} />
         </Route>
+        <Route path="/publication/:token" element={<PublicationPage />} />
         <Route path="/projects/:id" element={<ProjectLayout />}>
           <Route index element={<ProjectOverview />} />
           <Route path="households" element={<HouseholdsPage />} />
           <Route path="survey" element={<SurveyPage />} />
+          <Route path="feedbacks" element={<FeedbacksPage />} />
           <Route path="progress" element={<ProgressPage />} />
         </Route>
       </Routes>

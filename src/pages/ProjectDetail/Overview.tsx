@@ -9,6 +9,7 @@ import {
   GanttChart,
   TrendingUp,
   ArrowRight,
+  MessageSquare,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { formatCurrency } from '@/utils/feeCalculator';
@@ -232,6 +233,39 @@ export default function ProjectOverview() {
                 {project.progressNodes.map((node) => (
                   <span key={node.id}>{node.stage}</span>
                 ))}
+              </div>
+            </div>
+          </Link>
+
+          <Link
+            to={`/projects/${project.id}/feedbacks`}
+            className="card p-6 block card-hover-lift"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-purple-600" />
+                <h3 className="font-semibold text-slate-800">反馈管理</h3>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">收到反馈</span>
+                <span className="font-medium text-slate-700">
+                  {project.feedbacks.length} 条
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">待处理</span>
+                <span className="font-medium text-amber-600">
+                  {project.feedbacks.filter((f) => f.status === 'pending').length} 条
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">已采纳</span>
+                <span className="font-medium text-green-600">
+                  {project.feedbacks.filter((f) => f.status === 'adopted').length} 条
+                </span>
               </div>
             </div>
           </Link>

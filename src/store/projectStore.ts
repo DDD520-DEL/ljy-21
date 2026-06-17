@@ -6,12 +6,17 @@ import type {
   ProgressNode,
   MediaFile,
   ProjectStatus,
+  Publication,
+  Feedback,
+  FeedbackStatus,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST } from '@/types';
 import { calculateShareRatio } from '@/utils/feeCalculator';
 
 const STORAGE_KEY = 'elevator_projects';
+const STORAGE_VERSION_KEY = 'elevator_projects_version';
+const CURRENT_VERSION = 3;
 
 interface HouseholdInput {
   floor: number;
@@ -47,10 +52,31 @@ interface ProjectStore {
 
   updateProgressNode: (projectId: string, nodeId: string, data: Partial<ProgressNode>) => void;
   addMediaFile: (projectId: string, nodeId: string, file: Omit<MediaFile, 'id' | 'nodeId'>) => void;
+
+  createPublication: (projectId: string, data: {
+    title: string;
+    description: string;
+    durationDays: number;
+  }) => Publication;
+  getPublicationByToken: (token: string) => { publication: Publication; project: Project } | null;
+  isPublicationActive: (publication: Publication) => boolean;
+  deactivatePublication: (projectId: string, publicationId: string) => void;
+
+  addFeedback: (publicationToken: string, data: {
+    content: string;
+    contact?: string;
+  }) => Feedback | null;
+  updateFeedbackStatus: (projectId: string, feedbackId: string, status: FeedbackStatus) => void;
+  replyToFeedback: (projectId: string, feedbackId: string, reply: string) => void;
+  getProjectFeedbacks: (projectId: string) => Feedback[];
 }
 
 function generateId(): string {
   return 'id-' + Math.random().toString(36).slice(2, 11);
+}
+
+function generateToken(): string {
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
 
 function initProgressNodes(projectId: string): ProgressNode[] {
@@ -72,12 +98,22 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   initProjects: () => {
     try {
+      const storedVersion = localStorage.getItem(STORAGE_VERSION_KEY);
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        set({ projects: JSON.parse(stored) });
+      
+      if (stored && storedVersion === String(CURRENT_VERSION)) {
+        let projects = JSON.parse(stored);
+        projects = projects.map((p: Project) => ({
+          ...p,
+          publications: p.publications || [],
+          feedbacks: p.feedbacks || [],
+        }));
+        set({ projects });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
       } else {
         set({ projects: mockProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(mockProjects));
+        localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION));
       }
     } catch {
       set({ projects: mockProjects });
@@ -110,6 +146,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       households,
       surveyResponses: [],
       progressNodes: initProgressNodes(projectId),
+      publications: [],
+      feedbacks: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -246,5 +284,151 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       failCount: householdInputs.length - successCount,
       errors,
     };
+  },
+
+  createPublication: (projectId, data) => {
+    const now = new Date();
+    const endTime = new Date(now.getTime() + data.durationDays * 24 * 60 * 60 * 1000);
+
+    const newPublication: Publication = {
+      id: generateId(),
+      projectId,
+      token: generateToken(),
+      title: data.title,
+      description: data.description,
+      startTime: now.toISOString(),
+      endTime: endTime.toISOString(),
+      isActive: true,
+      createdAt: now.toISOString(),
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, publications: [...p.publications, newPublication] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newPublication;
+  },
+
+  getPublicationByToken: (token) => {
+    for (const project of get().projects) {
+      const publication = project.publications.find((p) => p.token === token);
+      if (publication) {
+        return { publication, project };
+      }
+    }
+    return null;
+  },
+
+  isPublicationActive: (publication) => {
+    if (!publication.isActive) return false;
+    const now = new Date();
+    const endTime = new Date(publication.endTime);
+    return now <= endTime;
+  },
+
+  deactivatePublication: (projectId, publicationId) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const publications = p.publications.map((pub) => {
+          if (pub.id === publicationId) {
+            return { ...pub, isActive: false };
+          }
+          return pub;
+        });
+        return { ...p, publications };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  addFeedback: (publicationToken, data) => {
+    const result = get().getPublicationByToken(publicationToken);
+    if (!result) return null;
+
+    const { publication, project } = result;
+
+    if (!get().isPublicationActive(publication)) {
+      return null;
+    }
+
+    const newFeedback: Feedback = {
+      id: generateId(),
+      projectId: project.id,
+      publicationId: publication.id,
+      content: data.content,
+      contact: data.contact,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === project.id) {
+        return { ...p, feedbacks: [...p.feedbacks, newFeedback] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newFeedback;
+  },
+
+  updateFeedbackStatus: (projectId, feedbackId, status) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const feedbacks = p.feedbacks.map((f) => {
+          if (f.id === feedbackId) {
+            return { ...f, status };
+          }
+          return f;
+        });
+        return { ...p, feedbacks };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  replyToFeedback: (projectId, feedbackId, reply) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const feedbacks = p.feedbacks.map((f) => {
+          if (f.id === feedbackId) {
+            return {
+              ...f,
+              reply,
+              status: 'replied' as FeedbackStatus,
+              repliedAt: new Date().toISOString(),
+            };
+          }
+          return f;
+        });
+        return { ...p, feedbacks };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getProjectFeedbacks: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...project.feedbacks].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   },
 }));

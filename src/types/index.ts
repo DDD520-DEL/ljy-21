@@ -13,6 +13,32 @@ export type NodeStatus = 'pending' | 'in_progress' | 'completed';
 
 export type MediaType = 'photo' | 'file';
 
+export type FeedbackStatus = 'pending' | 'replied' | 'adopted';
+
+export interface Publication {
+  id: string;
+  projectId: string;
+  token: string;
+  title: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface Feedback {
+  id: string;
+  projectId: string;
+  publicationId: string;
+  content: string;
+  contact?: string;
+  status: FeedbackStatus;
+  reply?: string;
+  createdAt: string;
+  repliedAt?: string;
+}
+
 export interface Household {
   id: string;
   projectId: string;
@@ -64,6 +90,8 @@ export interface Project {
   households: Household[];
   surveyResponses: SurveyResponse[];
   progressNodes: ProgressNode[];
+  publications: Publication[];
+  feedbacks: Feedback[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -110,3 +138,15 @@ export const STAGE_LIST = [
   { key: 'constructing', label: '开工建设', icon: 'Hammer' },
   { key: 'completed', label: '竣工验收', icon: 'CheckCircle2' },
 ] as const;
+
+export const FEEDBACK_STATUS_LABEL: Record<FeedbackStatus, string> = {
+  pending: '待处理',
+  replied: '已回复',
+  adopted: '已采纳',
+};
+
+export const FEEDBACK_STATUS_COLOR: Record<FeedbackStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700 border-amber-300',
+  replied: 'bg-blue-100 text-blue-700 border-blue-300',
+  adopted: 'bg-green-100 text-green-700 border-green-300',
+};
