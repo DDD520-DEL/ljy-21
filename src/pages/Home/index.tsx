@@ -15,6 +15,7 @@ import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, ARCHIVE_STATUS_LABEL } from '@/types';
 import type { ProjectStatus, ArchiveStatus } from '@/types';
 import ProjectCard from '@/components/ProjectCard';
+import StatsDashboard from '@/components/StatsDashboard';
 
 const STATUS_FILTERS: (ProjectStatus | 'all')[] = [
   'all',
@@ -52,6 +53,7 @@ export default function Home() {
   const [archiveFilter, setArchiveFilter] = useState<ArchiveStatus | 'all'>('active');
   const [showPendingBanner, setShowPendingBanner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [dashboardExpanded, setDashboardExpanded] = useState(true);
 
   useEffect(() => {
     initProjects();
@@ -151,6 +153,12 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <StatsDashboard
+        projects={filteredProjects}
+        expanded={dashboardExpanded}
+        onToggle={() => setDashboardExpanded(!dashboardExpanded)}
+      />
 
       {showPendingBanner && pendingCount > 0 && (
         <div className="bg-amber-50 border-b border-amber-200">
