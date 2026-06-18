@@ -19,6 +19,8 @@ export type MediaType = 'photo' | 'file';
 
 export type FeedbackStatus = 'pending' | 'replied' | 'adopted';
 
+export type FeeObjectionStatus = 'pending' | 'upheld' | 'adjusted';
+
 export type NotificationType =
   | 'project_approved'
   | 'stage_progress'
@@ -70,6 +72,24 @@ export interface Feedback {
   reply?: string;
   createdAt: string;
   repliedAt?: string;
+}
+
+export interface FeeObjection {
+  id: string;
+  projectId: string;
+  householdId: string;
+  householdName: string;
+  floor: number;
+  unit: string;
+  originalAmount: number;
+  requestedAmount?: number;
+  reason: string;
+  status: FeeObjectionStatus;
+  handler?: string;
+  handleReason?: string;
+  adjustedAmount?: number;
+  createdAt: string;
+  handledAt?: string;
 }
 
 export interface Household {
@@ -128,6 +148,7 @@ export interface Project {
   progressNodes: ProgressNode[];
   publications: Publication[];
   feedbacks: Feedback[];
+  feeObjections: FeeObjection[];
   operationLogs: OperationLog[];
 }
 
@@ -186,6 +207,18 @@ export const FEEDBACK_STATUS_COLOR: Record<FeedbackStatus, string> = {
   pending: 'bg-amber-100 text-amber-700 border-amber-300',
   replied: 'bg-blue-100 text-blue-700 border-blue-300',
   adopted: 'bg-green-100 text-green-700 border-green-300',
+};
+
+export const FEE_OBJECTION_STATUS_LABEL: Record<FeeObjectionStatus, string> = {
+  pending: '待处理',
+  upheld: '维持原方案',
+  adjusted: '已调整',
+};
+
+export const FEE_OBJECTION_STATUS_COLOR: Record<FeeObjectionStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700 border-amber-300',
+  upheld: 'bg-slate-100 text-slate-700 border-slate-300',
+  adjusted: 'bg-green-100 text-green-700 border-green-300',
 };
 
 export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {

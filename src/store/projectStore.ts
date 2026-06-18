@@ -14,6 +14,8 @@ import type {
   ArchiveStatus,
   OperationLog,
   OperationType,
+  FeeObjection,
+  FeeObjectionStatus,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
@@ -22,7 +24,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 interface HouseholdInput {
   floor: number;
@@ -94,6 +96,20 @@ interface ProjectStore {
     newStatus?: string;
   }) => void;
   getProjectOperationLogs: (projectId: string) => OperationLog[];
+
+  addFeeObjection: (projectId: string, data: {
+    householdId: string;
+    reason: string;
+    requestedAmount?: number;
+  }) => FeeObjection | null;
+  getProjectFeeObjections: (projectId: string) => FeeObjection[];
+  getPendingFeeObjectionCount: (projectId: string) => number;
+  handleFeeObjection: (projectId: string, objectionId: string, data: {
+    status: FeeObjectionStatus;
+    handleReason: string;
+    adjustedAmount?: number;
+    handler: string;
+  }) => void;
 }
 
 function generateId(): string {
@@ -135,6 +151,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feedbacks: p.feedbacks || [],
           archiveStatus: p.archiveStatus || 'active',
           operationLogs: p.operationLogs || [],
+          feeObjections: p.feeObjections || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -143,6 +160,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           ...p,
           archiveStatus: p.archiveStatus || 'active',
           operationLogs: p.operationLogs || [],
+          feeObjections: p.feeObjections || [],
         }));
         set({ projects: migratedProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedProjects));
@@ -192,6 +210,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       progressNodes: initProgressNodes(projectId),
       publications: [],
       feedbacks: [],
+      feeObjections: [],
       operationLogs: [],
     };
 
@@ -713,5 +732,116 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     return [...project.operationLogs].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+  },
+
+  addFeeObjection: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const household = project.households.find((h) => h.id === data.householdId);
+    if (!household) return null;
+
+    const newObjection: FeeObjection = {
+      id: generateId(),
+      projectId,
+      householdId: data.householdId,
+      householdName: household.ownerName,
+      floor: household.floor,
+      unit: household.unit,
+      originalAmount: household.shareAmount,
+      requestedAmount: data.requestedAmount,
+      reason: data.reason,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, feeObjections: [...p.feeObjections, newObjection] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addNotification({
+      type: 'fee_updated',
+      projectId,
+      projectName: project.name,
+      title: '新的费用分摊异议',
+      description: `${household.floor}层${household.unit} ${household.ownerName} 对分摊金额提出异议`,
+      targetPath: `/projects/${projectId}/households`,
+    });
+
+    return newObjection;
+  },
+
+  getProjectFeeObjections: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...project.feeObjections].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  getPendingFeeObjectionCount: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return 0;
+    return project.feeObjections.filter((o) => o.status === 'pending').length;
+  },
+
+  handleFeeObjection: (projectId, objectionId, data) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const objections = p.feeObjections.map((o) => {
+          if (o.id === objectionId) {
+            return {
+              ...o,
+              status: data.status,
+              handler: data.handler,
+              handleReason: data.handleReason,
+              adjustedAmount: data.adjustedAmount,
+              handledAt: new Date().toISOString(),
+            };
+          }
+          return o;
+        });
+
+        let updatedHouseholds = p.households;
+        if (data.status === 'adjusted' && data.adjustedAmount !== undefined) {
+          const objection = p.feeObjections.find((o) => o.id === objectionId);
+          if (objection) {
+            updatedHouseholds = p.households.map((h) => {
+              if (h.id === objection.householdId) {
+                return { ...h, shareAmount: data.adjustedAmount! };
+              }
+              return h;
+            });
+          }
+        }
+
+        return { ...p, feeObjections: objections, households: updatedHouseholds };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    const project = get().getProject(projectId);
+    const objection = project?.feeObjections.find((o) => o.id === objectionId);
+    if (objection && project) {
+      get().addNotification({
+        type: 'fee_updated',
+        projectId,
+        projectName: project.name,
+        title: '费用异议已处理',
+        description: `${objection.floor}层${objection.unit} 的分摊异议已${
+          data.status === 'upheld' ? '维持原方案' : '调整金额'
+        }`,
+        targetPath: `/projects/${projectId}/households`,
+      });
+    }
   },
 }));

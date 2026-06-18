@@ -10,9 +10,20 @@ import {
   MessageSquare,
   Shield,
   Loader2,
+  Building2,
+  MapPin,
+  DollarSign,
+  Calculator,
+  MessageSquarePlus,
+  X,
+  Check,
+  ThumbsUp,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
-import { MapPin, Building2 } from 'lucide-react';
+import { formatCurrency, calculateShareRatio } from '@/utils/feeCalculator';
+import { maskName, maskPhone } from '@/utils/maskData';
+import { FEE_OBJECTION_STATUS_LABEL, FEE_OBJECTION_STATUS_COLOR } from '@/types';
+import type { Household, FeeObjection } from '@/types';
 
 export default function PublicationPage() {
   const { token } = useParams<{ token: string }>();
@@ -22,12 +33,25 @@ export default function PublicationPage() {
   const getPublicationByToken = useProjectStore((s) => s.getPublicationByToken);
   const isPublicationActive = useProjectStore((s) => s.isPublicationActive);
   const addFeedback = useProjectStore((s) => s.addFeedback);
+  const addFeeObjection = useProjectStore((s) => s.addFeeObjection);
+  const getProjectFeeObjections = useProjectStore((s) => s.getProjectFeeObjections);
 
   const [content, setContent] = useState('');
   const [contact, setContact] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  const [showFeeSection, setShowFeeSection] = useState(false);
+  const [selectedFloor, setSelectedFloor] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState('');
+  const [selectedHousehold, setSelectedHousehold] = useState<Household | null>(null);
+
+  const [showObjectionDialog, setShowObjectionDialog] = useState(false);
+  const [objectionReason, setObjectionReason] = useState('');
+  const [requestedAmount, setRequestedAmount] = useState('');
+  const [objectionError, setObjectionError] = useState('');
+  const [objectionSubmitted, setObjectionSubmitted] = useState(false);
 
   useEffect(() => {
     if (projects.length === 0) {
@@ -100,6 +124,79 @@ export default function PublicationPage() {
     if (days > 0) return `剩余 ${days} 天 ${hours} 小时`;
     if (hours > 0) return `剩余 ${hours} 小时 ${minutes} 分钟`;
     return `剩余 ${minutes} 分钟`;
+  };
+
+  const recalculatedHouseholds = calculateShareRatio(
+    project.households.map((h) => ({
+      ...h,
+      shareRatio: 0,
+      shareAmount: 0,
+    })),
+    project.totalCost
+  );
+
+  const floors = Array.from(
+    new Set(recalculatedHouseholds.map((h) => h.floor))
+  ).sort((a, b) => a - b);
+
+  const unitsForSelectedFloor = recalculatedHouseholds
+    .filter((h) => h.floor === parseInt(selectedFloor))
+    .map((h) => h.unit);
+
+  const handleFloorChange = (floor: string) => {
+    setSelectedFloor(floor);
+    setSelectedUnit('');
+    setSelectedHousehold(null);
+  };
+
+  const handleUnitChange = (unit: string) => {
+    setSelectedUnit(unit);
+    const household = recalculatedHouseholds.find(
+      (h) => h.floor === parseInt(selectedFloor) && h.unit === unit
+    );
+    setSelectedHousehold(household || null);
+  };
+
+  const myObjections = selectedHousehold
+    ? getProjectFeeObjections(project.id).filter(
+        (o) => o.householdId === selectedHousehold.id
+      )
+    : [];
+
+  const handleOpenObjection = () => {
+    if (!selectedHousehold) return;
+    setObjectionReason('');
+    setRequestedAmount('');
+    setObjectionError('');
+    setObjectionSubmitted(false);
+    setShowObjectionDialog(true);
+  };
+
+  const handleSubmitObjection = () => {
+    if (!selectedHousehold) return;
+
+    if (!objectionReason.trim()) {
+      setObjectionError('请填写异议理由说明');
+      return;
+    }
+
+    const requested = requestedAmount ? parseFloat(requestedAmount) : undefined;
+    if (requestedAmount && (isNaN(requested!) || requested! < 0)) {
+      setObjectionError('请输入有效的申请调整金额');
+      return;
+    }
+
+    const result = addFeeObjection(project.id, {
+      householdId: selectedHousehold.id,
+      reason: objectionReason.trim(),
+      requestedAmount: requested,
+    });
+
+    if (result) {
+      setObjectionSubmitted(true);
+    } else {
+      setObjectionError('提交失败，请稍后重试');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -293,7 +390,343 @@ export default function PublicationPage() {
             </form>
           </div>
         )}
+
+        <div className="card p-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <button
+            onClick={() => setShowFeeSection(!showFeeSection)}
+            className="w-full flex items-center justify-between"
+          >
+            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-primary-600" />
+              费用分摊明细
+            </h3>
+            <span className="text-sm text-slate-500">
+              {showFeeSection ? '收起' : '查看'}
+            </span>
+          </button>
+
+          {showFeeSection && (
+            <div className="mt-5 space-y-5">
+              <div className="p-4 bg-primary-50 rounded-lg border border-primary-100">
+                <div className="flex items-start gap-2">
+                  <DollarSign className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-primary-700">
+                    <p className="font-medium mb-1">工程总费用</p>
+                    <p className="text-lg font-bold text-primary-800">
+                      {project.totalCost} 万元
+                    </p>
+                    <p className="text-primary-600 mt-1">
+                      系统根据楼层系数和房屋面积自动计算分摊比例
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  选择楼层
+                </label>
+                <select
+                  value={selectedFloor}
+                  onChange={(e) => handleFloorChange(e.target.value)}
+                  className="input"
+                >
+                  <option value="">请选择楼层</option>
+                  {floors.map((floor) => (
+                    <option key={floor} value={floor}>
+                      {floor} 层
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  选择房号
+                </label>
+                <select
+                  value={selectedUnit}
+                  onChange={(e) => handleUnitChange(e.target.value)}
+                  className="input"
+                  disabled={!selectedFloor}
+                >
+                  <option value="">请选择房号</option>
+                  {unitsForSelectedFloor.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {selectedHousehold && (
+              <div className="space-y-4">
+                <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+                      <Building2 className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-800">
+                        {selectedHousehold.floor}层 {selectedHousehold.unit}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        户主：{maskName(selectedHousehold.ownerName)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-sm">
+                    <div className="text-center p-3 bg-white rounded-lg">
+                      <p className="text-slate-500 mb-1">建筑面积</p>
+                      <p className="font-bold text-slate-800">
+                        {selectedHousehold.area} ㎡
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-white rounded-lg">
+                      <p className="text-slate-500 mb-1">分摊比例</p>
+                      <p className="font-bold text-primary-600">
+                        {selectedHousehold.shareRatio}%
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-white rounded-lg">
+                      <p className="text-slate-500 mb-1">分摊金额</p>
+                      <p className="font-bold text-amber-600">
+                        {formatCurrency(selectedHousehold.shareAmount)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {isActive && (
+                  <button
+                    onClick={handleOpenObjection}
+                    className="btn btn-outline w-full inline-flex items-center justify-center gap-2"
+                  >
+                    <MessageSquarePlus className="w-4 h-4" />
+                    对分摊金额有异议？点击提交
+                  </button>
+                )}
+
+                {myObjections.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-slate-700 text-sm">
+                      我的异议记录（{myObjections.length} 条）
+                    </h4>
+                    {myObjections.map((objection) => (
+                      <div
+                        key={objection.id}
+                        className="border border-slate-200 rounded-lg overflow-hidden"
+                      >
+                        <div className="p-3 bg-slate-50 flex items-center justify-between">
+                          <span className="text-sm text-slate-600">
+                          {new Date(objection.createdAt).toLocaleString('zh-CN')}
+                          </span>
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${FEE_OBJECTION_STATUS_COLOR[objection.status]}`}
+                          >
+                            {FEE_OBJECTION_STATUS_LABEL[objection.status]}
+                          </span>
+                        </div>
+                        <div className="p-3 space-y-2">
+                          <div className="p-2.5 bg-amber-50 rounded border border-amber-100">
+                            <p className="text-xs text-amber-600 mb-1">异议理由</p>
+                            <p className="text-sm text-amber-800">
+                              {objection.reason}
+                            </p>
+                          </div>
+                          {objection.status !== 'pending' && (
+                            <div
+                              className={`p-2.5 rounded border ${
+                                objection.status === 'adjusted'
+                                  ? 'bg-green-50 border-green-200'
+                                  : 'bg-slate-50 border-slate-200'
+                              }`}
+                            >
+                              <p
+                                className={`text-xs mb-1 ${
+                                  objection.status === 'adjusted'
+                                    ? 'text-green-600'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                处理结果
+                              </p>
+                              {objection.adjustedAmount !== undefined && (
+                                <p className="text-sm font-medium text-green-700 mb-1">
+                                  调整后金额：{formatCurrency(objection.adjustedAmount)}
+                                </p>
+                              )}
+                              <p
+                                className={`text-sm ${
+                                  objection.status === 'adjusted'
+                                    ? 'text-green-700'
+                                    : 'text-slate-600'
+                                }`}
+                              >
+                                {objection.handleReason}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      </div>
+
+      {showObjectionDialog && selectedHousehold && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">
+                  提交费用分摊异议
+                </h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  {selectedHousehold.floor}层 {selectedHousehold.unit}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowObjectionDialog(false);
+                  setObjectionSubmitted(false);
+                }}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+
+            {objectionSubmitted ? (
+              <div className="flex-1 overflow-auto p-6">
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle2 className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">
+                    提交成功
+                  </h3>
+                  <p className="text-slate-600 mb-6">
+                    您的异议已提交，我们会尽快审核处理。
+                    <br />
+                    处理结果将在此页面公示。
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowObjectionDialog(false);
+                      setObjectionSubmitted(false);
+                    }}
+                    className="btn btn-primary"
+                  >
+                    我知道了
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 overflow-auto p-6 space-y-4">
+                  <div className="p-4 bg-slate-50 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-slate-500">分摊比例：</span>
+                        <span className="font-medium text-primary-700">
+                          {selectedHousehold.shareRatio}%
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500">分摊金额：</span>
+                        <span className="font-bold text-amber-600">
+                          {formatCurrency(selectedHousehold.shareAmount)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      异议理由说明 <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      value={objectionReason}
+                      onChange={(e) => setObjectionReason(e.target.value)}
+                      placeholder="请详细说明您对分摊金额的异议理由..."
+                      rows={4}
+                      className="input resize-none"
+                      maxLength={500}
+                    />
+                    <div className="flex justify-between items-center mt-1">
+                      {objectionError && (
+                      <p className="text-sm text-red-600">{objectionError}</p>
+                    )}
+                      <p className="text-xs text-slate-400 ml-auto">
+                        {objectionReason.length}/500
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      申请调整金额（可选）
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
+                        ¥
+                      </span>
+                      <input
+                        type="number"
+                        value={requestedAmount}
+                        onChange={(e) => setRequestedAmount(e.target.value)}
+                        placeholder="请输入您认为合理的分摊金额"
+                        className="input pl-8"
+                        min="0"
+                        step="100"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      选填，您认为合理的分摊金额
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="flex items-start gap-2">
+                      <Shield className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-blue-700">
+                        您的异议将提交给项目负责人审核，
+                        审核结果会在此公示。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 border-t border-slate-200 flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowObjectionDialog(false);
+                      setObjectionSubmitted(false);
+                    }}
+                    className="btn btn-secondary"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSubmitObjection}
+                    className="btn btn-primary inline-flex items-center gap-1.5"
+                  >
+                    <Send className="w-4 h-4" />
+                    提交异议
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

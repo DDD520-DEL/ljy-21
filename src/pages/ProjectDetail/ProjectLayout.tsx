@@ -12,6 +12,7 @@ import {
   Archive,
   RotateCcw,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -22,6 +23,7 @@ export default function ProjectLayout() {
   const project = projects.find((p) => p.id === id);
   const archiveProject = useProjectStore((s) => s.archiveProject);
   const restoreProject = useProjectStore((s) => s.restoreProject);
+  const getPendingFeeObjectionCount = useProjectStore((s) => s.getPendingFeeObjectionCount);
 
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
@@ -34,6 +36,8 @@ export default function ProjectLayout() {
   const canArchive = project.archiveStatus === 'pending_archive' || 
     (project.status === 'completed' && project.archiveStatus === 'active');
   const canRestore = project.archiveStatus === 'archived';
+
+  const pendingObjectionCount = id ? getPendingFeeObjectionCount(id) : 0;
 
   const handleArchive = () => {
     archiveProject(project.id, '项目负责人');
@@ -117,6 +121,28 @@ export default function ProjectLayout() {
               )}
             </div>
           </div>
+
+          {pendingObjectionCount > 0 && (
+            <Link
+              to={`/projects/${id}/households`}
+              className="mt-4 flex items-center gap-3 px-4 py-3 bg-amber-500/90 hover:bg-amber-500 text-white rounded-lg transition-colors backdrop-blur"
+            >
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">
+                  您有 {pendingObjectionCount} 条待处理的费用分摊异议
+                </p>
+                <p className="text-sm text-amber-100">
+                  请及时审核住户提出的分摊金额异议
+                </p>
+              </div>
+              <div className="bg-white text-amber-600 px-3 py-1 rounded-full text-sm font-bold">
+                {pendingObjectionCount} 条待审
+              </div>
+            </Link>
+          )}
 
           <nav className="flex gap-1 mt-6 -mb-6 overflow-x-auto scrollbar-thin">
             {navItems.map((item) => (
