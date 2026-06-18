@@ -24,7 +24,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 interface HouseholdInput {
   floor: number;
@@ -60,7 +60,10 @@ interface ProjectStore {
   addSurveyResponse: (projectId: string, response: Omit<SurveyResponse, 'id' | 'projectId' | 'signedAt'>) => void;
 
   updateProgressNode: (projectId: string, nodeId: string, data: Partial<ProgressNode>) => void;
-  addMediaFile: (projectId: string, nodeId: string, file: Omit<MediaFile, 'id' | 'nodeId'>) => void;
+  addMediaFile: (projectId: string, nodeId: string, file: Omit<MediaFile, 'id' | 'nodeId' | 'createdAt'>) => void;
+  deleteMediaFile: (projectId: string, nodeId: string, fileId: string) => void;
+  deleteMediaFiles: (projectId: string, nodeId: string, fileIds: string[]) => void;
+  getNodeMediaFiles: (projectId: string, nodeId: string) => MediaFile[];
 
   createPublication: (projectId: string, data: {
     title: string;
@@ -155,6 +158,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+      } else if (stored && storedVersion) {
+        let projects = JSON.parse(stored);
+        
+        projects = projects.map((p: Project) => ({
+          ...p,
+          publications: p.publications || [],
+          feedbacks: p.feedbacks || [],
+          archiveStatus: p.archiveStatus || 'active',
+          operationLogs: p.operationLogs || [],
+          feeObjections: p.feeObjections || [],
+          progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
+            ...node,
+            mediaFiles: (node.mediaFiles || []).map((file: MediaFile) => ({
+              ...file,
+              createdAt: file.createdAt || new Date().toISOString(),
+            })),
+          })),
+        }));
+        
+        set({ projects });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+        localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION));
       } else {
         const migratedProjects = mockProjects.map((p: Project) => ({
           ...p,
@@ -341,6 +366,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
               ...file,
               id: generateId(),
               nodeId,
+              createdAt: new Date().toISOString(),
             };
             return { ...n, mediaFiles: [...n.mediaFiles, newFile] };
           }
@@ -352,6 +378,56 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     });
     set({ projects });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  deleteMediaFile: (projectId, nodeId, fileId) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const nodes = p.progressNodes.map((n) => {
+          if (n.id === nodeId) {
+            return {
+              ...n,
+              mediaFiles: n.mediaFiles.filter((f) => f.id !== fileId),
+            };
+          }
+          return n;
+        });
+        return { ...p, progressNodes: nodes };
+      }
+      return p;
+    });
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  deleteMediaFiles: (projectId, nodeId, fileIds) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const nodes = p.progressNodes.map((n) => {
+          if (n.id === nodeId) {
+            return {
+              ...n,
+              mediaFiles: n.mediaFiles.filter((f) => !fileIds.includes(f.id)),
+            };
+          }
+          return n;
+        });
+        return { ...p, progressNodes: nodes };
+      }
+      return p;
+    });
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getNodeMediaFiles: (projectId, nodeId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    const node = project.progressNodes.find((n) => n.id === nodeId);
+    if (!node) return [];
+    return [...node.mediaFiles].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   },
 
   importHouseholds: (projectId, householdInputs) => {

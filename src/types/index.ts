@@ -119,6 +119,7 @@ export interface MediaFile {
   type: MediaType;
   name: string;
   url: string;
+  createdAt: string;
 }
 
 export interface ProgressNode {

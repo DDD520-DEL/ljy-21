@@ -174,8 +174,8 @@ export const mockProjects: Project[] = [
         date: '2025-12-15',
         status: 'completed',
         mediaFiles: [
-          { id: 'm-101', nodeId: 'n-101', type: 'file', name: '电梯加装方案设计书.pdf', url: '#' },
-          { id: 'm-102', nodeId: 'n-101', type: 'photo', name: '方案公示现场', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=construction%20blueprint%20on%20wall%20public%20notice&image_size=square' },
+          { id: 'm-101', nodeId: 'n-101', type: 'file', name: '电梯加装方案设计书.pdf', url: '#', createdAt: '2025-12-15T10:00:00Z' },
+          { id: 'm-102', nodeId: 'n-101', type: 'photo', name: '方案公示现场', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=construction%20blueprint%20on%20wall%20public%20notice&image_size=square', createdAt: '2025-12-16T14:30:00Z' },
         ],
       },
       {
@@ -187,8 +187,8 @@ export const mockProjects: Project[] = [
         date: '2026-01-20',
         status: 'completed',
         mediaFiles: [
-          { id: 'm-103', nodeId: 'n-102', type: 'file', name: '中标通知书.pdf', url: '#' },
-          { id: 'm-104', nodeId: 'n-102', type: 'file', name: '施工合同.pdf', url: '#' },
+          { id: 'm-103', nodeId: 'n-102', type: 'file', name: '中标通知书.pdf', url: '#', createdAt: '2026-01-20T09:00:00Z' },
+          { id: 'm-104', nodeId: 'n-102', type: 'file', name: '施工合同.pdf', url: '#', createdAt: '2026-01-22T10:00:00Z' },
         ],
       },
       {
@@ -200,9 +200,9 @@ export const mockProjects: Project[] = [
         date: '2026-03-01',
         status: 'in_progress',
         mediaFiles: [
-          { id: 'm-105', nodeId: 'n-103', type: 'photo', name: '开工仪式', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=construction%20site%20groundbreaking%20ceremony%20elevator&image_size=square' },
-          { id: 'm-106', nodeId: 'n-103', type: 'photo', name: '施工现场', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=building%20construction%20site%20workers%20foundation&image_size=square' },
-          { id: 'm-107', nodeId: 'n-103', type: 'photo', name: '施工进度', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=steel%20structure%20erection%20construction&image_size=square' },
+          { id: 'm-105', nodeId: 'n-103', type: 'photo', name: '开工仪式', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=construction%20site%20groundbreaking%20ceremony%20elevator&image_size=square', createdAt: '2026-03-01T09:00:00Z' },
+          { id: 'm-106', nodeId: 'n-103', type: 'photo', name: '施工现场', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=building%20construction%20site%20workers%20foundation&image_size=square', createdAt: '2026-03-05T14:00:00Z' },
+          { id: 'm-107', nodeId: 'n-103', type: 'photo', name: '施工进度', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=steel%20structure%20erection%20construction&image_size=square', createdAt: '2026-03-10T11:00:00Z' },
         ],
       },
       {
@@ -314,7 +314,7 @@ export const mockProjects: Project[] = [
         date: '2025-11-20',
         status: 'completed',
         mediaFiles: [
-          { id: 'm-201', nodeId: 'n-203', type: 'photo', name: '施工完成外观', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20residential%20building%20with%20external%20glass%20elevator%20shaft&image_size=square' },
+          { id: 'm-201', nodeId: 'n-203', type: 'photo', name: '施工完成外观', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20residential%20building%20with%20external%20glass%20elevator%20shaft&image_size=square', createdAt: '2025-11-20T16:00:00Z' },
         ],
       },
       {
@@ -326,8 +326,8 @@ export const mockProjects: Project[] = [
         date: '2026-01-05',
         status: 'completed',
         mediaFiles: [
-          { id: 'm-202', nodeId: 'n-204', type: 'file', name: '验收合格报告.pdf', url: '#' },
-          { id: 'm-203', nodeId: 'n-204', type: 'photo', name: '电梯内部', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20elevator%20interior%20stainless%20steel%20clean&image_size=square' },
+          { id: 'm-202', nodeId: 'n-204', type: 'file', name: '验收合格报告.pdf', url: '#', createdAt: '2026-01-05T10:00:00Z' },
+          { id: 'm-203', nodeId: 'n-204', type: 'photo', name: '电梯内部', url: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=modern%20elevator%20interior%20stainless%20steel%20clean&image_size=square', createdAt: '2026-01-05T14:00:00Z' },
         ],
       },
     ],

@@ -12,10 +12,15 @@ import {
   File,
   Download,
   Calendar,
+  Trash2,
+  CheckSquare,
+  Square,
+  Image as ImageIcon,
 } from 'lucide-react';
 import type { Project, ProgressNode, MediaFile } from '@/types';
 import { NODE_STATUS_LABEL } from '@/types';
 import { useProjectStore } from '@/store/projectStore';
+import ImageViewer from '@/components/ImageViewer';
 
 const STAGE_ICONS: Record<string, typeof FileText> = {
   planning: FileText,
@@ -40,6 +45,8 @@ export default function ProgressTimeline({
   );
   const updateProgressNode = useProjectStore((s) => s.updateProgressNode);
   const addMediaFile = useProjectStore((s) => s.addMediaFile);
+  const deleteMediaFile = useProjectStore((s) => s.deleteMediaFile);
+  const deleteMediaFiles = useProjectStore((s) => s.deleteMediaFiles);
 
   const toggleNode = (id: string) => {
     setExpandedNode(expandedNode === id ? null : id);
@@ -83,6 +90,23 @@ export default function ProgressTimeline({
     });
   };
 
+  const handleDeleteFile = (nodeId: string, fileId: string) => {
+    deleteMediaFile(project.id, nodeId, fileId);
+  };
+
+  const handleDeleteFiles = (nodeId: string, fileIds: string[]) => {
+    deleteMediaFiles(project.id, nodeId, fileIds);
+  };
+
+  const handleDownloadFile = (file: MediaFile) => {
+    const link = document.createElement('a');
+    link.href = file.url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="relative">
       <div className="absolute left-6 top-4 bottom-4 w-0.5 bg-slate-200" />
@@ -98,6 +122,9 @@ export default function ProgressTimeline({
             onStatusChange={(status) => handleStatusChange(node.id, status)}
             onDescriptionChange={(desc) => handleDescriptionChange(node.id, desc)}
             onFileUpload={(files) => handleFileUpload(node.id, files)}
+            onDeleteFile={(fileId) => handleDeleteFile(node.id, fileId)}
+            onDeleteFiles={(fileIds) => handleDeleteFiles(node.id, fileIds)}
+            onDownloadFile={handleDownloadFile}
             editable={editable && node.status !== 'pending'}
           />
         ))}
@@ -114,6 +141,9 @@ interface TimelineNodeProps {
   onStatusChange: (status: 'pending' | 'in_progress' | 'completed') => void;
   onDescriptionChange: (desc: string) => void;
   onFileUpload: (files: FileList) => void;
+  onDeleteFile: (fileId: string) => void;
+  onDeleteFiles: (fileIds: string[]) => void;
+  onDownloadFile: (file: MediaFile) => void;
   editable: boolean;
 }
 
@@ -125,6 +155,9 @@ function TimelineNode({
   onStatusChange,
   onDescriptionChange,
   onFileUpload,
+  onDeleteFile,
+  onDeleteFiles,
+  onDownloadFile,
   editable,
 }: TimelineNodeProps) {
   const IconComponent = STAGE_ICONS[node.stageKey] || FileText;
@@ -148,6 +181,10 @@ function TimelineNode({
   }[node.status];
 
   const StatusIcon = statusConfig.icon;
+
+  const sortedMediaFiles = [...node.mediaFiles].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   return (
     <div className="relative pl-16">
@@ -241,14 +278,15 @@ function TimelineNode({
                 </div>
 
                 <div>
-                  <label className="label-field">上传照片/文件</label>
+                  <label className="label-field">上传施工现场照片</label>
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-all">
                     <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                    <p className="text-sm text-slate-500">点击或拖拽上传照片和文件</p>
+                    <p className="text-sm text-slate-500">点击或拖拽上传施工现场照片</p>
+                    <p className="text-xs text-slate-400 mt-1">支持批量上传，按上传时间排序</p>
                     <input
                       type="file"
                       multiple
-                      accept="image/*,.pdf,.doc,.docx"
+                      accept="image/*"
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files) onFileUpload(e.target.files);
@@ -270,13 +308,14 @@ function TimelineNode({
               </>
             )}
 
-            {node.mediaFiles.length > 0 && (
-              <div>
-                <p className="label-field mb-2">
-                  相关资料 ({node.mediaFiles.length})
-                </p>
-                <MediaGallery files={node.mediaFiles} />
-              </div>
+            {sortedMediaFiles.length > 0 && (
+              <MediaGallery
+                files={sortedMediaFiles}
+                editable={editable}
+                onDeleteFile={onDeleteFile}
+                onDeleteFiles={onDeleteFiles}
+                onDownloadFile={onDownloadFile}
+              />
             )}
           </div>
         )}
@@ -285,33 +324,206 @@ function TimelineNode({
   );
 }
 
-function MediaGallery({ files }: { files: MediaFile[] }) {
+interface MediaGalleryProps {
+  files: MediaFile[];
+  editable: boolean;
+  onDeleteFile: (fileId: string) => void;
+  onDeleteFiles: (fileIds: string[]) => void;
+  onDownloadFile: (file: MediaFile) => void;
+}
+
+function MediaGallery({
+  files,
+  editable,
+  onDeleteFile,
+  onDeleteFiles,
+  onDownloadFile,
+}: MediaGalleryProps) {
   const photos = files.filter((f) => f.type === 'photo');
   const documents = files.filter((f) => f.type === 'file');
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === photos.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(photos.map((p) => p.id)));
+    }
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (confirm(`确定要删除选中的 ${selectedIds.size} 张照片吗？`)) {
+      onDeleteFiles(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleBatchDownload = () => {
+    photos
+      .filter((p) => selectedIds.has(p.id))
+      .forEach((photo, index) => {
+        setTimeout(() => onDownloadFile(photo), index * 300);
+      });
+  };
+
+  const openViewer = (index: number) => {
+    if (selectedIds.size > 0) return;
+    setViewerIndex(index);
+    setViewerOpen(true);
+  };
+
+  const handleViewerDelete = (fileId: string) => {
+    onDeleteFile(fileId);
+  };
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {photos.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {photos.map((file) => (
-            <div
-              key={file.id}
-              className="group relative aspect-square rounded-lg overflow-hidden bg-slate-100"
-            >
-              <img
-                src={file.url}
-                alt={file.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                <p className="text-white text-xs truncate w-full">{file.name}</p>
-              </div>
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="w-4 h-4 text-primary-600" />
+              <p className="label-field mb-0">
+                现场照片 ({photos.length})
+              </p>
             </div>
-          ))}
+            {editable && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={selectAll}
+                  className="text-xs text-slate-500 hover:text-primary-600 flex items-center gap-1"
+                >
+                  {selectedIds.size === photos.length ? (
+                    <CheckSquare className="w-3.5 h-3.5" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5" />
+                  )}
+                  {selectedIds.size === photos.length ? '取消全选' : '全选'}
+                </button>
+                {selectedIds.size > 0 && (
+                  <>
+                    <span className="text-xs text-slate-400">|</span>
+                    <span className="text-xs text-primary-600 font-medium">
+                      已选 {selectedIds.size} 张
+                    </span>
+                    <button
+                      onClick={handleBatchDownload}
+                      className="text-xs text-slate-500 hover:text-primary-600 flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      下载
+                    </button>
+                    <button
+                      onClick={handleBatchDelete}
+                      className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      删除
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {photos.map((file, index) => (
+              <div
+                key={file.id}
+                className={`group relative aspect-square rounded-lg overflow-hidden bg-slate-100 cursor-pointer transition-all ${
+                  selectedIds.has(file.id)
+                    ? 'ring-2 ring-primary-500 ring-offset-2'
+                    : 'hover:ring-2 hover:ring-primary-300 hover:ring-offset-1'
+                }`}
+                onClick={() => openViewer(index)}
+              >
+                <img
+                  src={file.url}
+                  alt={file.name}
+                  className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                />
+
+                {editable && (
+                  <button
+                    onClick={(e) => toggleSelect(file.id, e)}
+                    className={`absolute top-2 left-2 w-5 h-5 rounded flex items-center justify-center transition-all ${
+                      selectedIds.has(file.id)
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-black/30 text-white/80 opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    {selectedIds.has(file.id) ? (
+                      <CheckSquare className="w-4 h-4" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
+
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                  <p className="text-white text-xs truncate font-medium">{file.name}</p>
+                  <p className="text-white/70 text-xs mt-0.5">{formatDate(file.createdAt)}</p>
+                </div>
+
+                {editable && selectedIds.size === 0 && (
+                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDownloadFile(file);
+                      }}
+                      className="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+                      title="下载"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('确定要删除这张照片吗？')) {
+                          onDeleteFile(file.id);
+                        }
+                      }}
+                      className="w-7 h-7 rounded-full bg-red-500/80 hover:bg-red-600 text-white flex items-center justify-center transition-colors"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
+
       {documents.length > 0 && (
         <div className="space-y-2">
+          <p className="label-field mb-2">相关文件 ({documents.length})</p>
           {documents.map((file) => (
             <div
               key={file.id}
@@ -325,13 +537,41 @@ function MediaGallery({ files }: { files: MediaFile[] }) {
                   <p className="font-medium text-slate-800 text-sm">{file.name}</p>
                 </div>
               </div>
-              <button className="p-2 text-slate-400 hover:text-primary-600 transition-colors">
-                <Download className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onDownloadFile(file)}
+                  className="p-2 text-slate-400 hover:text-primary-600 transition-colors"
+                  title="下载"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                {editable && (
+                  <button
+                    onClick={() => {
+                      if (confirm('确定要删除这个文件吗？')) {
+                        onDeleteFile(file.id);
+                      }
+                    }}
+                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
       )}
+
+      <ImageViewer
+        images={photos}
+        initialIndex={viewerIndex}
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        onDelete={editable ? handleViewerDelete : undefined}
+        onDownload={onDownloadFile}
+      />
     </div>
   );
 }
