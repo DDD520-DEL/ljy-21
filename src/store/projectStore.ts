@@ -9,13 +9,16 @@ import type {
   Publication,
   Feedback,
   FeedbackStatus,
+  Notification,
+  NotificationType,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
-import { STAGE_LIST } from '@/types';
+import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
 import { calculateShareRatio } from '@/utils/feeCalculator';
 
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
+const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
 const CURRENT_VERSION = 3;
 
 interface HouseholdInput {
@@ -35,6 +38,7 @@ interface ImportHouseholdResult {
 interface ProjectStore {
   projects: Project[];
   selectedProjectId: string | null;
+  notifications: Notification[];
 
   initProjects: () => void;
   getProject: (id: string) => Project | undefined;
@@ -69,6 +73,12 @@ interface ProjectStore {
   updateFeedbackStatus: (projectId: string, feedbackId: string, status: FeedbackStatus) => void;
   replyToFeedback: (projectId: string, feedbackId: string, reply: string) => void;
   getProjectFeedbacks: (projectId: string) => Feedback[];
+
+  addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => void;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  clearNotifications: () => void;
+  getUnreadCount: () => number;
 }
 
 function generateId(): string {
@@ -95,6 +105,7 @@ function initProgressNodes(projectId: string): ProgressNode[] {
 export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   selectedProjectId: null,
+  notifications: [],
 
   initProjects: () => {
     try {
@@ -114,6 +125,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         set({ projects: mockProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(mockProjects));
         localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION));
+      }
+
+      const storedNotifications = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+      if (storedNotifications) {
+        set({ notifications: JSON.parse(storedNotifications) });
       }
     } catch {
       set({ projects: mockProjects });
@@ -158,6 +174,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   updateProjectStatus: (id, status) => {
+    const project = get().getProject(id);
+    if (!project) return;
+
+    const oldStatus = project.status;
     const projects = get().projects.map((p) => {
       if (p.id === id) {
         return { ...p, status };
@@ -166,6 +186,41 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     });
     set({ projects });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    if (oldStatus !== status) {
+      let notificationType: NotificationType | null = null;
+      let title = '';
+      let description = '';
+      let targetPath = `/projects/${id}`;
+
+      if (oldStatus === 'surveying' && status === 'approved') {
+        notificationType = 'project_approved';
+        title = '项目立项审批通过';
+        description = `${project.name} 已通过立项审批，可以进入实施阶段`;
+        targetPath = `/projects/${id}/progress`;
+      } else if (status === 'planning' || status === 'bidding' || status === 'constructing') {
+        notificationType = 'stage_progress';
+        title = '项目进入新阶段';
+        description = `${project.name} 已进入「${PROJECT_STATUS_LABEL[status]}」阶段`;
+        targetPath = `/projects/${id}/progress`;
+      } else if (status === 'completed') {
+        notificationType = 'project_completed';
+        title = '项目竣工完成';
+        description = `${project.name} 已竣工验收，正式投入使用`;
+        targetPath = `/projects/${id}`;
+      }
+
+      if (notificationType) {
+        get().addNotification({
+          type: notificationType,
+          projectId: id,
+          projectName: project.name,
+          title,
+          description,
+          targetPath,
+        });
+      }
+    }
   },
 
   addSurveyResponse: (projectId, response) => {
@@ -278,6 +333,20 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     set({ projects });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    if (successCount > 0) {
+      const project = get().getProject(projectId);
+      if (project) {
+        get().addNotification({
+          type: 'fee_updated',
+          projectId,
+          projectName: project.name,
+          title: '费用分摊方案已更新',
+          description: `成功导入 ${successCount} 户住户信息，费用分摊方案已重新计算`,
+          targetPath: `/projects/${projectId}/households`,
+        });
+      }
+    }
 
     return {
       successCount,
@@ -430,5 +499,44 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     return [...project.feedbacks].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+  },
+
+  addNotification: (notification) => {
+    const newNotification: Notification = {
+      id: generateId(),
+      ...notification,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    const notifications = [newNotification, ...get().notifications];
+    set({ notifications });
+    localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
+  },
+
+  markNotificationAsRead: (id) => {
+    const notifications = get().notifications.map((n) => {
+      if (n.id === id) {
+        return { ...n, isRead: true };
+      }
+      return n;
+    });
+    set({ notifications });
+    localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
+  },
+
+  markAllNotificationsAsRead: () => {
+    const notifications = get().notifications.map((n) => ({ ...n, isRead: true }));
+    set({ notifications });
+    localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(notifications));
+  },
+
+  clearNotifications: () => {
+    set({ notifications: [] });
+    localStorage.removeItem(NOTIFICATION_STORAGE_KEY);
+  },
+
+  getUnreadCount: () => {
+    return get().notifications.filter((n) => !n.isRead).length;
   },
 }));

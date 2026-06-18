@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Building2, Home, Plus } from 'lucide-react';
+import NotificationCenter from '@/components/NotificationCenter';
 
 export default function Layout() {
   const location = useLocation();
@@ -20,6 +21,7 @@ export default function Layout() {
           </Link>
 
           <nav className="flex items-center gap-2">
+            <NotificationCenter />
             <Link
               to="/"
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${

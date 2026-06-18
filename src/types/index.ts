@@ -15,6 +15,24 @@ export type MediaType = 'photo' | 'file';
 
 export type FeedbackStatus = 'pending' | 'replied' | 'adopted';
 
+export type NotificationType =
+  | 'project_approved'
+  | 'stage_progress'
+  | 'fee_updated'
+  | 'project_completed';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  projectId: string;
+  projectName: string;
+  title: string;
+  description: string;
+  isRead: boolean;
+  createdAt: string;
+  targetPath: string;
+}
+
 export interface Publication {
   id: string;
   projectId: string;
@@ -149,4 +167,18 @@ export const FEEDBACK_STATUS_COLOR: Record<FeedbackStatus, string> = {
   pending: 'bg-amber-100 text-amber-700 border-amber-300',
   replied: 'bg-blue-100 text-blue-700 border-blue-300',
   adopted: 'bg-green-100 text-green-700 border-green-300',
+};
+
+export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
+  project_approved: '立项审批',
+  stage_progress: '施工进度',
+  fee_updated: '费用更新',
+  project_completed: '项目竣工',
+};
+
+export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
+  project_approved: 'bg-blue-100 text-blue-700',
+  stage_progress: 'bg-primary-100 text-primary-700',
+  fee_updated: 'bg-amber-100 text-amber-700',
+  project_completed: 'bg-green-100 text-green-700',
 };
