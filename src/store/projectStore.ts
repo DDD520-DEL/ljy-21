@@ -16,6 +16,8 @@ import type {
   OperationType,
   FeeObjection,
   FeeObjectionStatus,
+  DelayApplication,
+  DelayApprovalStatus,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
@@ -24,7 +26,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 6;
+const CURRENT_VERSION = 7;
 
 interface HouseholdInput {
   floor: number;
@@ -113,6 +115,23 @@ interface ProjectStore {
     adjustedAmount?: number;
     handler: string;
   }) => void;
+
+  addDelayApplication: (projectId: string, data: {
+    nodeId: string;
+    stageKey: 'planning' | 'bidding' | 'constructing' | 'completed';
+    applicant: string;
+    delayDays: number;
+    reason: string;
+    originalPlannedDate?: string;
+  }) => DelayApplication | null;
+  getProjectDelayApplications: (projectId: string) => DelayApplication[];
+  getNodeDelayApplications: (projectId: string, nodeId: string) => DelayApplication[];
+  getTotalApprovedDelayDays: (projectId: string) => number;
+  reviewDelayApplication: (projectId: string, applicationId: string, data: {
+    status: DelayApprovalStatus;
+    approver: string;
+    approvalComment?: string;
+  }) => void;
 }
 
 function generateId(): string {
@@ -155,6 +174,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           archiveStatus: p.archiveStatus || 'active',
           operationLogs: p.operationLogs || [],
           feeObjections: p.feeObjections || [],
+          delayApplications: p.delayApplications || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -168,6 +188,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           archiveStatus: p.archiveStatus || 'active',
           operationLogs: p.operationLogs || [],
           feeObjections: p.feeObjections || [],
+          delayApplications: p.delayApplications || [],
           progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
             ...node,
             mediaFiles: (node.mediaFiles || []).map((file: MediaFile) => ({
@@ -186,6 +207,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           archiveStatus: p.archiveStatus || 'active',
           operationLogs: p.operationLogs || [],
           feeObjections: p.feeObjections || [],
+          delayApplications: p.delayApplications || [],
         }));
         set({ projects: migratedProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedProjects));
@@ -237,6 +259,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       feedbacks: [],
       feeObjections: [],
       operationLogs: [],
+      delayApplications: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -917,6 +940,113 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           data.status === 'upheld' ? '维持原方案' : '调整金额'
         }`,
         targetPath: `/projects/${projectId}/households`,
+      });
+    }
+  },
+
+  addDelayApplication: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const newApplication: DelayApplication = {
+      id: generateId(),
+      projectId,
+      nodeId: data.nodeId,
+      stageKey: data.stageKey,
+      applicant: data.applicant,
+      delayDays: data.delayDays,
+      reason: data.reason,
+      status: 'pending',
+      originalPlannedDate: data.originalPlannedDate,
+      createdAt: new Date().toISOString(),
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, delayApplications: [...p.delayApplications, newApplication] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addNotification({
+      type: 'delay_request',
+      projectId,
+      projectName: project.name,
+      title: '新的工程延期申请',
+      description: `${data.applicant} 申请「${project.progressNodes.find(n => n.id === data.nodeId)?.stage}」阶段延期 ${data.delayDays} 天`,
+      targetPath: `/projects/${projectId}/progress`,
+    });
+
+    return newApplication;
+  },
+
+  getProjectDelayApplications: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...project.delayApplications].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  getNodeDelayApplications: (projectId, nodeId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return project.delayApplications
+      .filter((a) => a.nodeId === nodeId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  getTotalApprovedDelayDays: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return 0;
+    return project.delayApplications
+      .filter((a) => a.status === 'approved')
+      .reduce((sum, a) => sum + a.delayDays, 0);
+  },
+
+  reviewDelayApplication: (projectId, applicationId, data) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const applications = p.delayApplications.map((a) => {
+          if (a.id === applicationId) {
+            return {
+              ...a,
+              status: data.status,
+              approver: data.approver,
+              approvalComment: data.approvalComment,
+              approvedAt: new Date().toISOString(),
+            };
+          }
+          return a;
+        });
+        return { ...p, delayApplications: applications };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    const project = get().getProject(projectId);
+    const application = project?.delayApplications.find((a) => a.id === applicationId);
+    if (application && project) {
+      const notificationType = data.status === 'approved' ? 'delay_approved' : 'delay_rejected';
+      const title = data.status === 'approved' ? '延期申请已通过' : '延期申请已驳回';
+      const description =
+        data.status === 'approved'
+          ? `${application.applicant} 申请的「${project.progressNodes.find(n => n.id === application.nodeId)?.stage}」阶段延期 ${application.delayDays} 天已通过审批`
+          : `${application.applicant} 申请的「${project.progressNodes.find(n => n.id === application.nodeId)?.stage}」阶段延期 ${application.delayDays} 天已被驳回`;
+
+      get().addNotification({
+        type: notificationType,
+        projectId,
+        projectName: project.name,
+        title,
+        description,
+        targetPath: `/projects/${projectId}/progress`,
       });
     }
   },

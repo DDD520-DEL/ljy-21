@@ -21,11 +21,33 @@ export type FeedbackStatus = 'pending' | 'replied' | 'adopted';
 
 export type FeeObjectionStatus = 'pending' | 'upheld' | 'adjusted';
 
+export type DelayApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export type NotificationType =
   | 'project_approved'
   | 'stage_progress'
   | 'fee_updated'
-  | 'project_completed';
+  | 'project_completed'
+  | 'delay_request'
+  | 'delay_approved'
+  | 'delay_rejected';
+
+export interface DelayApplication {
+  id: string;
+  projectId: string;
+  nodeId: string;
+  stageKey: 'planning' | 'bidding' | 'constructing' | 'completed';
+  applicant: string;
+  delayDays: number;
+  reason: string;
+  status: DelayApprovalStatus;
+  originalPlannedDate?: string;
+  approver?: string;
+  approvalComment?: string;
+  approvedAt?: string;
+  createdAt: string;
+}
+
 
 export interface OperationLog {
   id: string;
@@ -151,6 +173,7 @@ export interface Project {
   feedbacks: Feedback[];
   feeObjections: FeeObjection[];
   operationLogs: OperationLog[];
+  delayApplications: DelayApplication[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -227,6 +250,9 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   stage_progress: '施工进度',
   fee_updated: '费用更新',
   project_completed: '项目竣工',
+  delay_request: '延期申请',
+  delay_approved: '延期审批通过',
+  delay_rejected: '延期审批驳回',
 };
 
 export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
@@ -234,7 +260,24 @@ export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
   stage_progress: 'bg-primary-100 text-primary-700',
   fee_updated: 'bg-amber-100 text-amber-700',
   project_completed: 'bg-green-100 text-green-700',
+  delay_request: 'bg-orange-100 text-orange-700',
+  delay_approved: 'bg-green-100 text-green-700',
+  delay_rejected: 'bg-red-100 text-red-700',
 };
+
+export const DELAY_APPROVAL_STATUS_LABEL: Record<DelayApprovalStatus, string> = {
+  pending: '待审批',
+  approved: '已通过',
+  rejected: '已驳回',
+};
+
+export const DELAY_APPROVAL_STATUS_COLOR: Record<DelayApprovalStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700 border-amber-300',
+  approved: 'bg-green-100 text-green-700 border-green-300',
+  rejected: 'bg-red-100 text-red-700 border-red-300',
+};
+
+export const TOTAL_DELAY_WARNING_THRESHOLD = 60;
 
 export const ARCHIVE_STATUS_LABEL: Record<ArchiveStatus, string> = {
   active: '活跃',

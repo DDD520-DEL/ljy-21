@@ -9,17 +9,23 @@ import {
   DollarSign,
   CheckCircle2,
   X,
+  Clock,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { NOTIFICATION_TYPE_LABEL, NOTIFICATION_TYPE_COLOR } from '@/types';
 import type { NotificationType } from '@/types';
 
 const getNotificationIcon = (type: NotificationType) => {
-  const iconMap = {
+  const iconMap: Record<NotificationType, typeof Bell> = {
     project_approved: Building2,
     stage_progress: GanttChart,
     fee_updated: DollarSign,
     project_completed: CheckCircle2,
+    delay_request: Clock,
+    delay_approved: CheckCircle2,
+    delay_rejected: XCircle,
   };
   return iconMap[type];
 };

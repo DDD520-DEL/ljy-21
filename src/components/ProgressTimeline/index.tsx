@@ -16,11 +16,18 @@ import {
   CheckSquare,
   Square,
   Image as ImageIcon,
+  AlertTriangle,
+  Clock3,
 } from 'lucide-react';
-import type { Project, ProgressNode, MediaFile } from '@/types';
-import { NODE_STATUS_LABEL } from '@/types';
+import type { Project, ProgressNode, MediaFile, DelayApplication } from '@/types';
+import {
+  NODE_STATUS_LABEL,
+  DELAY_APPROVAL_STATUS_LABEL,
+  DELAY_APPROVAL_STATUS_COLOR,
+} from '@/types';
 import { useProjectStore } from '@/store/projectStore';
 import ImageViewer from '@/components/ImageViewer';
+import DelayApplicationModal from '@/components/DelayApplicationModal';
 
 const STAGE_ICONS: Record<string, typeof FileText> = {
   planning: FileText,
@@ -47,6 +54,10 @@ export default function ProgressTimeline({
   const addMediaFile = useProjectStore((s) => s.addMediaFile);
   const deleteMediaFile = useProjectStore((s) => s.deleteMediaFile);
   const deleteMediaFiles = useProjectStore((s) => s.deleteMediaFiles);
+  const getNodeDelayApplications = useProjectStore((s) => s.getNodeDelayApplications);
+
+  const [delayModalOpen, setDelayModalOpen] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<ProgressNode | null>(null);
 
   const toggleNode = (id: string) => {
     setExpandedNode(expandedNode === id ? null : id);
@@ -107,28 +118,45 @@ export default function ProgressTimeline({
     document.body.removeChild(link);
   };
 
+  const handleOpenDelayModal = (node: ProgressNode) => {
+    setSelectedNode(node);
+    setDelayModalOpen(true);
+  };
+
   return (
-    <div className="relative">
+    <div className="relative space-y-4">
       <div className="absolute left-6 top-4 bottom-4 w-0.5 bg-slate-200" />
 
-      <div className="space-y-4">
-        {project.progressNodes.map((node, index) => (
-          <TimelineNode
-            key={node.id}
-            node={node}
-            index={index}
-            isExpanded={expandedNode === node.id}
-            onToggle={() => toggleNode(node.id)}
-            onStatusChange={(status) => handleStatusChange(node.id, status)}
-            onDescriptionChange={(desc) => handleDescriptionChange(node.id, desc)}
-            onFileUpload={(files) => handleFileUpload(node.id, files)}
-            onDeleteFile={(fileId) => handleDeleteFile(node.id, fileId)}
-            onDeleteFiles={(fileIds) => handleDeleteFiles(node.id, fileIds)}
-            onDownloadFile={handleDownloadFile}
-            editable={editable && node.status !== 'pending'}
-          />
-        ))}
-      </div>
+      {project.progressNodes.map((node, index) => (
+        <TimelineNode
+          key={node.id}
+          node={node}
+          index={index}
+          isExpanded={expandedNode === node.id}
+          onToggle={() => toggleNode(node.id)}
+          onStatusChange={(status) => handleStatusChange(node.id, status)}
+          onDescriptionChange={(desc) => handleDescriptionChange(node.id, desc)}
+          onFileUpload={(files) => handleFileUpload(node.id, files)}
+          onDeleteFile={(fileId) => handleDeleteFile(node.id, fileId)}
+          onDeleteFiles={(fileIds) => handleDeleteFiles(node.id, fileIds)}
+          onDownloadFile={handleDownloadFile}
+          editable={editable && node.status !== 'pending'}
+          delayApplications={getNodeDelayApplications(project.id, node.id)}
+          onRequestDelay={() => handleOpenDelayModal(node)}
+        />
+      ))}
+
+      {selectedNode && (
+        <DelayApplicationModal
+          isOpen={delayModalOpen}
+          onClose={() => {
+            setDelayModalOpen(false);
+            setSelectedNode(null);
+          }}
+          projectId={project.id}
+          node={selectedNode}
+        />
+      )}
     </div>
   );
 }
@@ -145,6 +173,8 @@ interface TimelineNodeProps {
   onDeleteFiles: (fileIds: string[]) => void;
   onDownloadFile: (file: MediaFile) => void;
   editable: boolean;
+  delayApplications: DelayApplication[];
+  onRequestDelay: () => void;
 }
 
 function TimelineNode({
@@ -159,6 +189,8 @@ function TimelineNode({
   onDeleteFiles,
   onDownloadFile,
   editable,
+  delayApplications,
+  onRequestDelay,
 }: TimelineNodeProps) {
   const IconComponent = STAGE_ICONS[node.stageKey] || FileText;
 
@@ -186,6 +218,16 @@ function TimelineNode({
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 
+  const totalApprovedDelay = delayApplications
+    .filter((a) => a.status === 'approved')
+    .reduce((sum, a) => sum + a.delayDays, 0);
+
+  const pendingDelay = delayApplications
+    .filter((a) => a.status === 'pending')
+    .reduce((sum, a) => sum + a.delayDays, 0);
+
+  const hasDelay = delayApplications.length > 0;
+
   return (
     <div className="relative pl-16">
       <div
@@ -199,18 +241,30 @@ function TimelineNode({
           onClick={onToggle}
           className="w-full p-5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
               <IconComponent className="w-5 h-5 text-slate-600" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="font-semibold text-slate-800">
                   阶段 {index + 1}：{node.stage}
                 </h4>
                 <span className={`badge ${statusConfig.badge}`}>
                   {NODE_STATUS_LABEL[node.status]}
                 </span>
+                {hasDelay && totalApprovedDelay > 0 && (
+                  <span className="badge bg-amber-100 text-amber-700 flex items-center gap-1">
+                    <Clock3 className="w-3 h-3" />
+                    已延期 {totalApprovedDelay} 天
+                  </span>
+                )}
+                {pendingDelay > 0 && (
+                  <span className="badge bg-orange-100 text-orange-700 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle className="w-3 h-3" />
+                    审批中 {pendingDelay} 天
+                  </span>
+                )}
               </div>
               {node.date && (
                 <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1">
@@ -221,16 +275,69 @@ function TimelineNode({
             </div>
           </div>
           {isExpanded ? (
-            <ChevronUp className="w-5 h-5 text-slate-400" />
+            <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
           ) : (
-            <ChevronDown className="w-5 h-5 text-slate-400" />
+            <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
           )}
         </button>
 
         {isExpanded && (
           <div className="px-5 pb-5 border-t border-slate-100 pt-4 space-y-4">
+            {hasDelay && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <Clock3 className="w-4 h-4 text-amber-600" />
+                  延期记录
+                </p>
+                <div className="space-y-2">
+                  {delayApplications.map((app) => (
+                    <div
+                      key={app.id}
+                      className={`p-3 rounded-lg border ${
+                        app.status === 'approved'
+                          ? 'bg-amber-50 border-amber-200'
+                          : app.status === 'rejected'
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-orange-50 border-orange-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`badge ${DELAY_APPROVAL_STATUS_COLOR[app.status]}`}>
+                            {DELAY_APPROVAL_STATUS_LABEL[app.status]}
+                          </span>
+                          <span className="text-sm font-medium text-slate-700">
+                            延期 {app.delayDays} 天
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          {new Date(app.createdAt).toLocaleDateString('zh-CN')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-600">{app.reason}</p>
+                      {app.status !== 'pending' && app.approvalComment && (
+                        <p className="text-xs text-slate-500 mt-1 pt-1 border-t border-slate-200/50">
+                          审批意见：{app.approvalComment}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {editable ? (
               <>
+                {node.status === 'in_progress' && (
+                  <button
+                    onClick={onRequestDelay}
+                    className="w-full sm:w-auto inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 transition-all text-sm font-medium"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    申请延期
+                  </button>
+                )}
+
                 <div>
                   <label className="label-field">节点状态</label>
                   <div className="flex gap-2">

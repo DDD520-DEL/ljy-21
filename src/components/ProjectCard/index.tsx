@@ -1,13 +1,24 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, MapPin, Users, CheckCircle2, Archive, Clock } from 'lucide-react';
+import { ChevronRight, MapPin, Users, CheckCircle2, Archive, Clock, AlertTriangle } from 'lucide-react';
 import type { Project } from '@/types';
-import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
+import {
+  PROJECT_STATUS_LABEL,
+  PROJECT_STATUS_COLOR,
+  ARCHIVE_STATUS_LABEL,
+  ARCHIVE_STATUS_COLOR,
+  TOTAL_DELAY_WARNING_THRESHOLD,
+} from '@/types';
+import { useProjectStore } from '@/store/projectStore';
 
 interface ProjectCardProps {
   project: Project;
 }
 
 export default function ProjectCard({ project }: ProjectCardProps) {
+  const getTotalApprovedDelayDays = useProjectStore((s) => s.getTotalApprovedDelayDays);
+  const totalDelayDays = getTotalApprovedDelayDays(project.id);
+  const isOverdue = totalDelayDays > TOTAL_DELAY_WARNING_THRESHOLD;
+
   const totalHouseholds = project.households.length;
   const signedCount = project.surveyResponses.length;
   const agreeCount = project.surveyResponses.filter(
@@ -23,9 +34,20 @@ export default function ProjectCard({ project }: ProjectCardProps) {
   return (
     <Link
       to={`/projects/${project.id}`}
-      className="card card-hover-lift block group"
+      className={`card card-hover-lift block group relative overflow-hidden ${
+        isOverdue ? 'ring-2 ring-red-300 ring-offset-1' : ''
+      }`}
     >
-      <div className="p-6">
+      {isOverdue && (
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-1.5 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          <span className="text-sm font-medium">
+            逾期警告：累计延期 {totalDelayDays} 天（超过 {TOTAL_DELAY_WARNING_THRESHOLD} 天）
+          </span>
+        </div>
+      )}
+
+      <div className={`p-6 ${isOverdue ? 'pt-12' : ''}`}>
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 pr-4">
             <h3 className="font-serif text-lg font-bold text-slate-800 group-hover:text-primary-700 transition-colors">
@@ -52,6 +74,12 @@ export default function ProjectCard({ project }: ProjectCardProps) {
                   <Archive className="w-3 h-3" />
                 )}
                 {ARCHIVE_STATUS_LABEL[project.archiveStatus]}
+              </span>
+            )}
+            {totalDelayDays > 0 && !isOverdue && (
+              <span className="badge whitespace-nowrap text-xs flex items-center gap-1 bg-amber-100 text-amber-700">
+                <Clock className="w-3 h-3" />
+                延期 {totalDelayDays} 天
               </span>
             )}
           </div>

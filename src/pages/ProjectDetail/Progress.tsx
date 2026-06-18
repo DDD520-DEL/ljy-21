@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   GanttChart,
@@ -5,15 +6,24 @@ import {
   CheckCircle2,
   AlertCircle,
   Play,
+  Clock,
+  AlertTriangle,
+  List,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import ProgressTimeline from '@/components/ProgressTimeline';
+import DelayApprovalPanel from '@/components/DelayApprovalPanel';
+import { TOTAL_DELAY_WARNING_THRESHOLD } from '@/types';
 
 export default function ProgressPage() {
   const { id } = useParams<{ id: string }>();
   const project = useProjectStore((s) => s.getProject(id || ''));
   const updateProjectStatus = useProjectStore((s) => s.updateProjectStatus);
   const updateProgressNode = useProjectStore((s) => s.updateProgressNode);
+  const getTotalApprovedDelayDays = useProjectStore((s) => s.getTotalApprovedDelayDays);
+  const getProjectDelayApplications = useProjectStore((s) => s.getProjectDelayApplications);
+
+  const [activeTab, setActiveTab] = useState<'timeline' | 'delay'>('timeline');
 
   if (!project) return null;
 
@@ -21,6 +31,12 @@ export default function ProgressPage() {
     (n) => n.status === 'completed'
   ).length;
   const overallProgress = (completedCount / project.progressNodes.length) * 100;
+
+  const totalApprovedDelayDays = getTotalApprovedDelayDays(project.id);
+  const pendingDelayCount = getProjectDelayApplications(project.id).filter(
+    (a) => a.status === 'pending'
+  ).length;
+  const isOverdue = totalApprovedDelayDays > TOTAL_DELAY_WARNING_THRESHOLD;
 
   const startPlanning = () => {
     if (project.status === 'approved') {
@@ -116,6 +132,24 @@ export default function ProgressPage() {
         </div>
       )}
 
+      {isOverdue && (
+        <div className="card p-6 border-red-300 bg-red-50/50">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0 animate-pulse">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-red-800 mb-1">
+                项目逾期警告
+              </h3>
+              <p className="text-sm text-red-700">
+                该项目累计延期已达 <strong>{totalApprovedDelayDays}</strong> 天，超过 {TOTAL_DELAY_WARNING_THRESHOLD} 天预警阈值，请密切关注施工进度并及时采取措施。
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
@@ -132,12 +166,30 @@ export default function ProgressPage() {
             </div>
           </div>
 
-          {canAdvance && project.status !== 'approved' && project.status !== 'completed' && (
-            <button onClick={advanceStage} className="btn-primary inline-flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              完成当前阶段
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-4">
+            {totalApprovedDelayDays > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span className="text-sm font-medium text-amber-700">
+                  累计延期 {totalApprovedDelayDays} 天
+                </span>
+              </div>
+            )}
+            {pendingDelayCount > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 border border-orange-200 rounded-lg animate-pulse">
+                <AlertTriangle className="w-4 h-4 text-orange-600" />
+                <span className="text-sm font-medium text-orange-700">
+                  {pendingDelayCount} 项待审批
+                </span>
+              </div>
+            )}
+            {canAdvance && project.status !== 'approved' && project.status !== 'completed' && (
+              <button onClick={advanceStage} className="btn-primary inline-flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                完成当前阶段
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mb-6">
@@ -170,12 +222,46 @@ export default function ProgressPage() {
             ))}
           </div>
         </div>
+
+        <div className="flex border-b border-slate-200 -mx-6 px-6">
+          <button
+            onClick={() => setActiveTab('timeline')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-all flex items-center gap-2 ${
+              activeTab === 'timeline'
+                ? 'border-primary-600 text-primary-700'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <GanttChart className="w-4 h-4" />
+            进度时间轴
+          </button>
+          <button
+            onClick={() => setActiveTab('delay')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-all flex items-center gap-2 relative ${
+              activeTab === 'delay'
+                ? 'border-primary-600 text-primary-700'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <List className="w-4 h-4" />
+            延期申请管理
+            {pendingDelayCount > 0 && (
+              <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-full bg-orange-500 text-white text-xs flex items-center justify-center">
+                {pendingDelayCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
-      <ProgressTimeline project={project} editable={
-        ['approved', 'planning', 'bidding', 'constructing', 'completed'].includes(project.status) &&
-        project.status !== 'surveying' && project.status !== 'draft'
-      } />
+      {activeTab === 'timeline' ? (
+        <ProgressTimeline project={project} editable={
+          ['approved', 'planning', 'bidding', 'constructing', 'completed'].includes(project.status) &&
+          project.status !== 'surveying' && project.status !== 'draft'
+        } />
+      ) : (
+        <DelayApprovalPanel project={project} />
+      )}
     </div>
   );
 }
