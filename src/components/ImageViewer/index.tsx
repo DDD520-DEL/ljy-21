@@ -32,6 +32,30 @@ export default function ImageViewer({
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
 
+  const goToPrev = useCallback(() => {
+    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
+    setScale(1);
+    setRotation(0);
+  }, [images.length]);
+
+  const goToNext = useCallback(() => {
+    setCurrentIndex((prev) => (prev + 1) % images.length);
+    setScale(1);
+    setRotation(0);
+  }, [images.length]);
+
+  const handleZoomIn = useCallback(() => {
+    setScale((prev) => Math.min(prev + 0.5, 3));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setScale((prev) => Math.max(prev - 0.5, 0.5));
+  }, []);
+
+  const handleRotate = useCallback(() => {
+    setRotation((prev) => prev + 90);
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       setCurrentIndex(initialIndex);
@@ -59,30 +83,6 @@ export default function ImageViewer({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, goToPrev, goToNext, onClose]);
-
-  const goToPrev = useCallback(() => {
-    setCurrentIndex((prev) => (prev - 1 + images.length) % images.length);
-    setScale(1);
-    setRotation(0);
-  }, [images.length]);
-
-  const goToNext = useCallback(() => {
-    setCurrentIndex((prev) => (prev + 1) % images.length);
-    setScale(1);
-    setRotation(0);
-  }, [images.length]);
-
-  const handleZoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.5, 3));
-  };
-
-  const handleZoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.5, 0.5));
-  };
-
-  const handleRotate = () => {
-    setRotation((prev) => prev + 90);
-  };
 
   const handleDownload = () => {
     if (onDownload && images[currentIndex]) {
