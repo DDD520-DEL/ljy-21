@@ -126,7 +126,7 @@ export default function PublicationPage() {
     return `剩余 ${minutes} 分钟`;
   };
 
-  const recalculatedHouseholds = calculateShareRatio(
+  const calculatedHouseholds = calculateShareRatio(
     project.households.map((h) => ({
       ...h,
       shareRatio: 0,
@@ -135,11 +135,19 @@ export default function PublicationPage() {
     project.totalCost
   );
 
+  const displayHouseholds = calculatedHouseholds.map((calcH) => {
+    const storedH = project.households.find((h) => h.id === calcH.id);
+    return {
+      ...calcH,
+      shareAmount: storedH ? storedH.shareAmount : calcH.shareAmount,
+    };
+  });
+
   const floors = Array.from(
-    new Set(recalculatedHouseholds.map((h) => h.floor))
+    new Set(displayHouseholds.map((h) => h.floor))
   ).sort((a, b) => a - b);
 
-  const unitsForSelectedFloor = recalculatedHouseholds
+  const unitsForSelectedFloor = displayHouseholds
     .filter((h) => h.floor === parseInt(selectedFloor))
     .map((h) => h.unit);
 
@@ -151,7 +159,7 @@ export default function PublicationPage() {
 
   const handleUnitChange = (unit: string) => {
     setSelectedUnit(unit);
-    const household = recalculatedHouseholds.find(
+    const household = displayHouseholds.find(
       (h) => h.floor === parseInt(selectedFloor) && h.unit === unit
     );
     setSelectedHousehold(household || null);

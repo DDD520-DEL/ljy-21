@@ -187,7 +187,7 @@ export default function HouseholdsPage() {
 
   if (!project) return null;
 
-  const recalculated = calculateShareRatio(
+  const calculated = calculateShareRatio(
     project.households.map((h) => ({
       ...h,
       shareRatio: 0,
@@ -196,13 +196,21 @@ export default function HouseholdsPage() {
     project.totalCost
   );
 
-  const totalShare = recalculated.reduce(
+  const displayHouseholds = calculated.map((calcH) => {
+    const storedH = project.households.find((h) => h.id === calcH.id);
+    return {
+      ...calcH,
+      shareAmount: storedH ? storedH.shareAmount : calcH.shareAmount,
+    };
+  });
+
+  const totalShare = displayHouseholds.reduce(
     (sum, h) => sum + h.shareAmount,
     0
   );
 
-  const householdsByFloor: Record<number, typeof recalculated> = {};
-  recalculated.forEach((h) => {
+  const householdsByFloor: Record<number, typeof displayHouseholds> = {};
+  displayHouseholds.forEach((h) => {
     if (!householdsByFloor[h.floor]) householdsByFloor[h.floor] = [];
     householdsByFloor[h.floor].push(h);
   });
@@ -219,7 +227,7 @@ export default function HouseholdsPage() {
             <span className="text-sm">总户数</span>
           </div>
           <p className="text-2xl font-bold text-slate-800">
-            {recalculated.length} 户
+            {displayHouseholds.length} 户
           </p>
         </div>
         <div className="card p-5">
@@ -246,7 +254,7 @@ export default function HouseholdsPage() {
             <span className="text-sm">参与分摊</span>
           </div>
           <p className="text-2xl font-bold text-green-600">
-            {recalculated.filter((h) => h.shareAmount > 0).length} 户
+            {displayHouseholds.filter((h) => h.shareAmount > 0).length} 户
           </p>
         </div>
         <div className="card p-5">
@@ -439,7 +447,7 @@ export default function HouseholdsPage() {
                   合计
                 </td>
                 <td className="px-4 py-3 text-right text-primary-700">
-                  {recalculated.reduce((s, h) => s + h.shareRatio, 0).toFixed(2)}%
+                  {displayHouseholds.reduce((s, h) => s + h.shareRatio, 0).toFixed(2)}%
                 </td>
                 <td className="px-4 py-3 text-right text-amber-600">
                   {formatCurrency(totalShare)}
