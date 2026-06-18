@@ -20,7 +20,6 @@ export default function ProgressPage() {
   const completedCount = project.progressNodes.filter(
     (n) => n.status === 'completed'
   ).length;
-  const inProgress = project.progressNodes.find((n) => n.status === 'in_progress');
   const overallProgress = (completedCount / project.progressNodes.length) * 100;
 
   const startPlanning = () => {

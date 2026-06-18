@@ -7,6 +7,10 @@ export type ProjectStatus =
   | 'constructing'
   | 'completed';
 
+export type ArchiveStatus = 'active' | 'pending_archive' | 'archived';
+
+export type OperationType = 'archive' | 'restore' | 'status_change';
+
 export type OpinionType = 'agree' | 'oppose' | 'abstain';
 
 export type NodeStatus = 'pending' | 'in_progress' | 'completed';
@@ -20,6 +24,17 @@ export type NotificationType =
   | 'stage_progress'
   | 'fee_updated'
   | 'project_completed';
+
+export interface OperationLog {
+  id: string;
+  projectId: string;
+  type: OperationType;
+  operator: string;
+  description: string;
+  oldStatus?: string;
+  newStatus?: string;
+  createdAt: string;
+}
 
 export interface Notification {
   id: string;
@@ -104,12 +119,16 @@ export interface Project {
   totalFloors: number;
   totalCost: number;
   status: ProjectStatus;
+  archiveStatus: ArchiveStatus;
   createdAt: string;
+  completedAt?: string;
+  archivedAt?: string;
   households: Household[];
   surveyResponses: SurveyResponse[];
   progressNodes: ProgressNode[];
   publications: Publication[];
   feedbacks: Feedback[];
+  operationLogs: OperationLog[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -181,4 +200,22 @@ export const NOTIFICATION_TYPE_COLOR: Record<NotificationType, string> = {
   stage_progress: 'bg-primary-100 text-primary-700',
   fee_updated: 'bg-amber-100 text-amber-700',
   project_completed: 'bg-green-100 text-green-700',
+};
+
+export const ARCHIVE_STATUS_LABEL: Record<ArchiveStatus, string> = {
+  active: '活跃',
+  pending_archive: '待归档',
+  archived: '已归档',
+};
+
+export const ARCHIVE_STATUS_COLOR: Record<ArchiveStatus, string> = {
+  active: 'bg-green-100 text-green-700',
+  pending_archive: 'bg-amber-100 text-amber-700',
+  archived: 'bg-slate-300 text-slate-700',
+};
+
+export const OPERATION_TYPE_LABEL: Record<OperationType, string> = {
+  archive: '项目归档',
+  restore: '项目恢复',
+  status_change: '状态变更',
 };

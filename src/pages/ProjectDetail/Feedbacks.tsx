@@ -4,7 +4,6 @@ import {
   MessageSquare,
   Clock,
   CheckCircle2,
-  AlertCircle,
   Send,
   Reply,
   ThumbsUp,
@@ -18,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { FEEDBACK_STATUS_LABEL, FEEDBACK_STATUS_COLOR } from '@/types';
-import type { Feedback, FeedbackStatus } from '@/types';
+import type { Feedback } from '@/types';
 
 export default function FeedbacksPage() {
   const { id } = useParams<{ id: string }>();

@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, MapPin, Users, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, MapPin, Users, CheckCircle2, Archive, Clock } from 'lucide-react';
 import type { Project } from '@/types';
-import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR } from '@/types';
-import { maskName } from '@/utils/maskData';
+import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
 
 interface ProjectCardProps {
   project: Project;
@@ -37,11 +36,25 @@ export default function ProjectCard({ project }: ProjectCardProps) {
               <span className="truncate">{project.address}</span>
             </div>
           </div>
-          <span
-            className={`badge whitespace-nowrap ${PROJECT_STATUS_COLOR[project.status]}`}
-          >
-            {PROJECT_STATUS_LABEL[project.status]}
-          </span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span
+              className={`badge whitespace-nowrap ${PROJECT_STATUS_COLOR[project.status]}`}
+            >
+              {PROJECT_STATUS_LABEL[project.status]}
+            </span>
+            {project.archiveStatus !== 'active' && (
+              <span
+                className={`badge whitespace-nowrap text-xs flex items-center gap-1 ${ARCHIVE_STATUS_COLOR[project.archiveStatus]}`}
+              >
+                {project.archiveStatus === 'pending_archive' ? (
+                  <Clock className="w-3 h-3" />
+                ) : (
+                  <Archive className="w-3 h-3" />
+                )}
+                {ARCHIVE_STATUS_LABEL[project.archiveStatus]}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-4 mb-4">

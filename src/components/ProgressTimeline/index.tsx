@@ -9,10 +9,8 @@ import {
   ChevronDown,
   ChevronUp,
   Upload,
-  Image,
   File,
   Download,
-  Trash2,
   Calendar,
 } from 'lucide-react';
 import type { Project, ProgressNode, MediaFile } from '@/types';

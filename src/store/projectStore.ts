@@ -11,6 +11,9 @@ import type {
   FeedbackStatus,
   Notification,
   NotificationType,
+  ArchiveStatus,
+  OperationLog,
+  OperationType,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
@@ -19,7 +22,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 interface HouseholdInput {
   floor: number;
@@ -79,6 +82,18 @@ interface ProjectStore {
   markAllNotificationsAsRead: () => void;
   clearNotifications: () => void;
   getUnreadCount: () => number;
+
+  checkPendingArchive: () => Project[];
+  archiveProject: (projectId: string, operator: string) => void;
+  restoreProject: (projectId: string, operator: string, reason?: string) => void;
+  addOperationLog: (projectId: string, data: {
+    type: OperationType;
+    operator: string;
+    description: string;
+    oldStatus?: string;
+    newStatus?: string;
+  }) => void;
+  getProjectOperationLogs: (projectId: string) => OperationLog[];
 }
 
 function generateId(): string {
@@ -118,12 +133,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           ...p,
           publications: p.publications || [],
           feedbacks: p.feedbacks || [],
+          archiveStatus: p.archiveStatus || 'active',
+          operationLogs: p.operationLogs || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
       } else {
-        set({ projects: mockProjects });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(mockProjects));
+        const migratedProjects = mockProjects.map((p: Project) => ({
+          ...p,
+          archiveStatus: p.archiveStatus || 'active',
+          operationLogs: p.operationLogs || [],
+        }));
+        set({ projects: migratedProjects });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedProjects));
         localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION));
       }
 
@@ -132,7 +154,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         set({ notifications: JSON.parse(storedNotifications) });
       }
     } catch {
-      set({ projects: mockProjects });
+      const migratedProjects = mockProjects.map((p: Project) => ({
+        ...p,
+        archiveStatus: p.archiveStatus || 'active',
+        operationLogs: p.operationLogs || [],
+      }));
+      set({ projects: migratedProjects });
     }
   },
 
@@ -158,12 +185,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       totalFloors: data.totalFloors,
       totalCost: data.totalCost,
       status: 'draft',
+      archiveStatus: 'active',
       createdAt: new Date().toISOString(),
       households,
       surveyResponses: [],
       progressNodes: initProgressNodes(projectId),
       publications: [],
       feedbacks: [],
+      operationLogs: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -178,9 +207,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     if (!project) return;
 
     const oldStatus = project.status;
+    const now = new Date().toISOString();
+    const updates: Partial<Project> = { status };
+    
+    if (status === 'completed' && !project.completedAt) {
+      updates.completedAt = now;
+    }
+
     const projects = get().projects.map((p) => {
       if (p.id === id) {
-        return { ...p, status };
+        return { ...p, ...updates };
       }
       return p;
     });
@@ -188,6 +224,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
 
     if (oldStatus !== status) {
+      get().addOperationLog(id, {
+        type: 'status_change',
+        operator: '系统',
+        description: `项目状态从「${PROJECT_STATUS_LABEL[oldStatus]}」变更为「${PROJECT_STATUS_LABEL[status]}」`,
+        oldStatus,
+        newStatus: status,
+      });
+
       let notificationType: NotificationType | null = null;
       let title = '';
       let description = '';
@@ -538,5 +582,136 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   getUnreadCount: () => {
     return get().notifications.filter((n) => !n.isRead).length;
+  },
+
+  checkPendingArchive: () => {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    const pendingProjects = get().projects.filter((p) => {
+      if (p.status !== 'completed') return false;
+      if (p.archiveStatus === 'archived') return false;
+      if (!p.completedAt) return false;
+      
+      const completedDate = new Date(p.completedAt);
+      return completedDate <= thirtyDaysAgo;
+    });
+
+    const updatedProjects = get().projects.map((p) => {
+      const isPending = pendingProjects.some((pp) => pp.id === p.id);
+      if (isPending && p.archiveStatus === 'active') {
+        return { ...p, archiveStatus: 'pending_archive' as ArchiveStatus };
+      }
+      return p;
+    });
+
+    if (JSON.stringify(updatedProjects) !== JSON.stringify(get().projects)) {
+      set({ projects: updatedProjects });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProjects));
+    }
+
+    return pendingProjects;
+  },
+
+  archiveProject: (projectId, operator) => {
+    const project = get().getProject(projectId);
+    if (!project) return;
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          archiveStatus: 'archived' as ArchiveStatus,
+          archivedAt: new Date().toISOString(),
+        };
+      }
+      return p;
+    });
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addOperationLog(projectId, {
+      type: 'archive',
+      operator,
+      description: `项目已被归档`,
+      oldStatus: project.archiveStatus,
+      newStatus: 'archived',
+    });
+
+    get().addNotification({
+      type: 'project_completed',
+      projectId,
+      projectName: project.name,
+      title: '项目已归档',
+      description: `${project.name} 已被 ${operator} 归档，将不再显示在首页默认列表中`,
+      targetPath: `/projects/${projectId}`,
+    });
+  },
+
+  restoreProject: (projectId, operator, reason) => {
+    const project = get().getProject(projectId);
+    if (!project) return;
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          archiveStatus: 'active' as ArchiveStatus,
+          archivedAt: undefined,
+        };
+      }
+      return p;
+    });
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    const description = reason 
+      ? `项目已从归档状态恢复，恢复原因：${reason}`
+      : `项目已从归档状态恢复`;
+
+    get().addOperationLog(projectId, {
+      type: 'restore',
+      operator,
+      description,
+      oldStatus: project.archiveStatus,
+      newStatus: 'active',
+    });
+
+    get().addNotification({
+      type: 'project_completed',
+      projectId,
+      projectName: project.name,
+      title: '项目已恢复',
+      description: `${project.name} 已被 ${operator} 恢复为活跃状态`,
+      targetPath: `/projects/${projectId}`,
+    });
+  },
+
+  addOperationLog: (projectId, data) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const newLog: OperationLog = {
+          id: generateId(),
+          projectId,
+          ...data,
+          createdAt: new Date().toISOString(),
+        };
+        return {
+          ...p,
+          operationLogs: [...p.operationLogs, newLog],
+        };
+      }
+      return p;
+    });
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getProjectOperationLogs: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...project.operationLogs].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   },
 }));

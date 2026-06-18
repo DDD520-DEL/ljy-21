@@ -10,16 +10,23 @@ import {
   TrendingUp,
   ArrowRight,
   MessageSquare,
+  Clock,
+  History,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { formatCurrency } from '@/utils/feeCalculator';
+import { OPERATION_TYPE_LABEL, PROJECT_STATUS_LABEL } from '@/types';
+import type { OperationLog } from '@/types';
 import SurveyChart from '@/components/SurveyChart';
 
 export default function ProjectOverview() {
   const { id } = useParams<{ id: string }>();
   const project = useProjectStore((s) => s.getProject(id || ''));
+  const getProjectOperationLogs = useProjectStore((s) => s.getProjectOperationLogs);
 
   if (!project) return null;
+
+  const operationLogs = getProjectOperationLogs(project.id);
 
   const totalHouseholds = project.households.length;
   const signedCount = project.surveyResponses.length;
@@ -278,6 +285,66 @@ export default function ProjectOverview() {
         </h3>
         <SurveyChart project={project} />
       </div>
+
+      {operationLogs.length > 0 && (
+        <div className="card p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <History className="w-5 h-5 text-primary-600" />
+            <h3 className="font-serif text-lg font-bold text-slate-800">
+              操作日志
+            </h3>
+            <span className="text-sm text-slate-500">
+              共 {operationLogs.length} 条记录
+            </span>
+          </div>
+          <div className="space-y-4">
+            {operationLogs.slice(0, 10).map((log: OperationLog) => (
+              <div
+                key={log.id}
+                className="flex items-start gap-4 p-4 bg-slate-50 rounded-lg"
+              >
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    log.type === 'archive'
+                      ? 'bg-amber-100 text-amber-600'
+                      : log.type === 'restore'
+                      ? 'bg-green-100 text-green-600'
+                      : 'bg-blue-100 text-blue-600'
+                  }`}
+                >
+                  {log.type === 'archive' ? (
+                    <Clock className="w-5 h-5" />
+                  ) : log.type === 'restore' ? (
+                    <ArrowRight className="w-5 h-5" />
+                  ) : (
+                    <TrendingUp className="w-5 h-5" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium text-slate-800">
+                      {OPERATION_TYPE_LABEL[log.type]}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      {new Date(log.createdAt).toLocaleString('zh-CN')}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-1">{log.description}</p>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-500">操作人：{log.operator}</span>
+                    {log.oldStatus && log.newStatus && (
+                      <span className="text-slate-400">
+                        ({PROJECT_STATUS_LABEL[log.oldStatus as keyof typeof PROJECT_STATUS_LABEL] || log.oldStatus} →{' '}
+                        {PROJECT_STATUS_LABEL[log.newStatus as keyof typeof PROJECT_STATUS_LABEL] || log.newStatus})
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
