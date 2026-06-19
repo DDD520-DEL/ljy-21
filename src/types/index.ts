@@ -364,3 +364,51 @@ export const ELEVATOR_RATED_SPEED_OPTIONS = [
   { value: 2.0, label: '2.0 m/s' },
   { value: 2.5, label: '2.5 m/s' },
 ];
+
+export type PolicyLevel = 'national' | 'province' | 'city' | 'district';
+
+export const POLICY_LEVEL_LABEL: Record<PolicyLevel, string> = {
+  national: '国家级',
+  province: '省级',
+  city: '市级',
+  district: '区县级',
+};
+
+export const POLICY_LEVEL_COLOR: Record<PolicyLevel, string> = {
+  national: 'bg-red-100 text-red-700 border-red-200',
+  province: 'bg-purple-100 text-purple-700 border-purple-200',
+  city: 'bg-blue-100 text-blue-700 border-blue-200',
+  district: 'bg-green-100 text-green-700 border-green-200',
+};
+
+export interface SubsidyMaterial {
+  name: string;
+  description?: string;
+  required: boolean;
+}
+
+export interface SubsidyPolicy {
+  id: string;
+  title: string;
+  level: PolicyLevel;
+  province: string;
+  city: string;
+  district?: string;
+  subsidyStandard: string;
+  subsidyAmount?: {
+    min: number;
+    max: number;
+    unit: string;
+  };
+  applicationConditions: string[];
+  requiredMaterials: SubsidyMaterial[];
+  sourceUrl: string;
+  sourceName: string;
+  effectiveDate: string;
+  expiryDate?: string;
+  issuingDepartment: string;
+  documentNumber?: string;
+  summary: string;
+  createdAt: string;
+  updatedAt: string;
+}
