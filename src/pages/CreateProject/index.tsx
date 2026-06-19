@@ -43,6 +43,7 @@ interface HouseholdForm {
   area: number;
   ownerName: string;
   phone: string;
+  familyPopulation: number;
 }
 
 export default function CreateProject() {
@@ -101,10 +102,10 @@ export default function CreateProject() {
   };
 
   const [households, setHouseholds] = useState<HouseholdForm[]>([
-    { floor: 1, unit: '101', area: 85, ownerName: '张**', phone: '138****8001' },
-    { floor: 1, unit: '102', area: 85, ownerName: '李**', phone: '138****8002' },
-    { floor: 2, unit: '201', area: 85, ownerName: '王**', phone: '138****8003' },
-    { floor: 2, unit: '202', area: 85, ownerName: '赵**', phone: '138****8004' },
+    { floor: 1, unit: '101', area: 85, ownerName: '张**', phone: '138****8001', familyPopulation: 3 },
+    { floor: 1, unit: '102', area: 85, ownerName: '李**', phone: '138****8002', familyPopulation: 2 },
+    { floor: 2, unit: '201', area: 85, ownerName: '王**', phone: '138****8003', familyPopulation: 4 },
+    { floor: 2, unit: '202', area: 85, ownerName: '赵**', phone: '138****8004', familyPopulation: 3 },
   ]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +121,7 @@ export default function CreateProject() {
       projectId: 'temp',
       shareRatio: 0,
       shareAmount: 0,
+      familyPopulation: h.familyPopulation,
     })),
     totalCost
   );
@@ -128,7 +130,7 @@ export default function CreateProject() {
     const lastFloor = households.length > 0 ? households[households.length - 1].floor : 1;
     setHouseholds([
       ...households,
-      { floor: lastFloor, unit: '', area: 80, ownerName: '', phone: '' },
+      { floor: lastFloor, unit: '', area: 80, ownerName: '', phone: '', familyPopulation: 3 },
     ]);
   };
 
@@ -174,6 +176,7 @@ export default function CreateProject() {
       area: row.area,
       ownerName: row.ownerName,
       phone: row.phone,
+      familyPopulation: row.familyPopulation || 3,
     }));
 
     setHouseholds((prev) => [...prev, ...newHouseholds]);
@@ -651,7 +654,7 @@ export default function CreateProject() {
                       placeholder="如 201"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-1">
                     <label className="text-xs text-slate-500 mb-1 block">面积(㎡)</label>
                     <input
                       type="number"
@@ -659,6 +662,18 @@ export default function CreateProject() {
                       value={h.area}
                       onChange={(e) =>
                         updateHousehold(idx, 'area', parseFloat(e.target.value) || 0)
+                      }
+                      className="input-field !py-2 text-sm"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <label className="text-xs text-slate-500 mb-1 block">家庭人口</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={h.familyPopulation}
+                      onChange={(e) =>
+                        updateHousehold(idx, 'familyPopulation', parseInt(e.target.value) || 1)
                       }
                       className="input-field !py-2 text-sm"
                     />
@@ -764,6 +779,7 @@ export default function CreateProject() {
                           area: r.area,
                           ownerName: r.ownerName,
                           phone: r.phone,
+                          familyPopulation: r.familyPopulation || 3,
                         })),
                       ];
 
@@ -809,6 +825,7 @@ export default function CreateProject() {
                                   <th className="px-4 py-3 text-left font-medium text-slate-600">楼层</th>
                                   <th className="px-4 py-3 text-left font-medium text-slate-600">房号</th>
                                   <th className="px-4 py-3 text-right font-medium text-slate-600">面积</th>
+                                  <th className="px-4 py-3 text-right font-medium text-slate-600">家庭人口</th>
                                   <th className="px-4 py-3 text-right font-medium text-slate-600">分摊比例</th>
                                   <th className="px-4 py-3 text-right font-medium text-slate-600">分摊金额</th>
                                 </tr>
@@ -825,6 +842,7 @@ export default function CreateProject() {
                                     <td className="px-4 py-3 text-slate-700">{row.floor} 层</td>
                                     <td className="px-4 py-3 text-slate-700">{row.unit}</td>
                                     <td className="px-4 py-3 text-right text-slate-700">{row.area} ㎡</td>
+                                    <td className="px-4 py-3 text-right text-slate-700">{row.familyPopulation || 3} 人</td>
                                     <td className="px-4 py-3 text-right font-medium text-primary-700">
                                       {newCalculated[idx]?.shareRatio.toFixed(2) || 0}%
                                     </td>

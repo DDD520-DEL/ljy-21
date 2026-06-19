@@ -124,6 +124,7 @@ export interface Household {
   phone: string;
   shareRatio: number;
   shareAmount: number;
+  familyPopulation: number;
 }
 
 export interface SurveyResponse {

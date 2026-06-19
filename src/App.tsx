@@ -5,6 +5,7 @@ import Home from '@/pages/Home';
 import CreateProject from '@/pages/CreateProject';
 import ElevatorBrands from '@/pages/ElevatorBrands';
 import PolicySubsidy from '@/pages/PolicySubsidy';
+import ResidentDirectory from '@/pages/ResidentDirectory';
 import ProjectLayout from '@/pages/ProjectDetail/ProjectLayout';
 import ProjectOverview from '@/pages/ProjectDetail/Overview';
 import HouseholdsPage from '@/pages/ProjectDetail/Households';
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/projects/create" element={<CreateProject />} />
           <Route path="/elevator-brands" element={<ElevatorBrands />} />
           <Route path="/policy-subsidy" element={<PolicySubsidy />} />
+          <Route path="/resident-directory" element={<ResidentDirectory />} />
         </Route>
         <Route path="/publication/:token" element={<PublicationPage />} />
         <Route path="/projects/:id" element={<ProjectLayout />}>

@@ -7,6 +7,7 @@ export interface HouseholdImportRow {
   floor: number;
   unit: string;
   area: number;
+  familyPopulation?: number;
   isValid: boolean;
   errors: string[];
 }
@@ -79,6 +80,7 @@ export function parseExcelFile(file: File): Promise<ImportResult> {
         const floorIdx = findColumnIndex(headers, '楼层');
         const unitIdx = findColumnIndex(headers, '房号');
         const areaIdx = findColumnIndex(headers, '面积');
+        const familyPopIdx = findColumnIndex(headers, '家庭人口');
 
         const validRows: HouseholdImportRow[] = [];
         const invalidRows: HouseholdImportRow[] = [];
@@ -93,6 +95,7 @@ export function parseExcelFile(file: File): Promise<ImportResult> {
           const floorRaw = String(row[floorIdx] || '').trim();
           const unit = String(row[unitIdx] || '').trim();
           const areaRaw = String(row[areaIdx] || '').trim();
+          const familyPopRaw = familyPopIdx !== -1 ? String(row[familyPopIdx] || '').trim() : '';
 
           if (!ownerName) {
             errors.push('姓名不能为空');
@@ -128,6 +131,14 @@ export function parseExcelFile(file: File): Promise<ImportResult> {
             }
           }
 
+          let familyPopulation: number | undefined;
+          if (familyPopRaw) {
+            familyPopulation = parseInt(familyPopRaw, 10);
+            if (isNaN(familyPopulation) || familyPopulation <= 0) {
+              errors.push('家庭人口必须是大于0的整数');
+            }
+          }
+
           const importRow: HouseholdImportRow = {
             rowNumber,
             ownerName,
@@ -135,6 +146,7 @@ export function parseExcelFile(file: File): Promise<ImportResult> {
             floor,
             unit,
             area,
+            familyPopulation,
             isValid: errors.length === 0,
             errors,
           };
@@ -165,14 +177,14 @@ export function parseExcelFile(file: File): Promise<ImportResult> {
 }
 
 export function generateExcelTemplate(): void {
-  const headers = ['姓名', '电话', '楼层', '房号', '面积'];
+  const headers = ['姓名', '电话', '楼层', '房号', '面积', '家庭人口'];
   const sampleData = [
-    ['张三', '13800138001', 1, '101', 85.5],
-    ['李四', '13800138002', 1, '102', 90.0],
-    ['王五', '13800138003', 2, '201', 85.5],
-    ['赵六', '13800138004', 2, '202', 90.0],
-    ['钱七', '13800138005', 3, '301', 85.5],
-    ['孙八', '13800138006', 3, '302', 90.0],
+    ['张三', '13800138001', 1, '101', 85.5, 3],
+    ['李四', '13800138002', 1, '102', 90.0, 2],
+    ['王五', '13800138003', 2, '201', 85.5, 4],
+    ['赵六', '13800138004', 2, '202', 90.0, 3],
+    ['钱七', '13800138005', 3, '301', 85.5, 5],
+    ['孙八', '13800138006', 3, '302', 90.0, 2],
   ];
 
   const wsData = [headers, ...sampleData];
@@ -182,6 +194,7 @@ export function generateExcelTemplate(): void {
     { wch: 12 },
     { wch: 15 },
     { wch: 8 },
+    { wch: 10 },
     { wch: 10 },
     { wch: 10 },
   ];

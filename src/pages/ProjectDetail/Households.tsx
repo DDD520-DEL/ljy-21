@@ -90,6 +90,7 @@ export default function HouseholdsPage() {
       area: row.area,
       ownerName: row.ownerName,
       phone: row.phone,
+      familyPopulation: row.familyPopulation || 3,
     }));
 
     importHouseholds(id, newHouseholds);
@@ -670,6 +671,7 @@ export default function HouseholdsPage() {
                     area: r.area,
                     ownerName: r.ownerName,
                     phone: r.phone,
+                    familyPopulation: r.familyPopulation || 3,
                     shareRatio: 0,
                     shareAmount: 0,
                   })),

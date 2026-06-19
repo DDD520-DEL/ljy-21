@@ -37,6 +37,7 @@ interface HouseholdInput {
   area: number;
   ownerName: string;
   phone: string;
+  familyPopulation: number;
 }
 
 interface ImportHouseholdResult {
@@ -193,6 +194,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
+          households: (p.households || []).map((h: Household) => ({
+            ...h,
+            familyPopulation: h.familyPopulation || 3,
+          })),
           progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
             ...node,
             dailyLogs: node.dailyLogs || [],
@@ -220,6 +225,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             dailyLogs: node.dailyLogs || [],
           })),
           surveyReminders: p.surveyReminders || [],
+          households: (p.households || []).map((h: Household) => ({
+            ...h,
+            familyPopulation: h.familyPopulation || 3,
+          })),
         }));
         
         set({ projects });
@@ -233,6 +242,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
+          households: (p.households || []).map((h: Household) => ({
+            ...h,
+            familyPopulation: h.familyPopulation || 3,
+          })),
           progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
             ...node,
             dailyLogs: node.dailyLogs || [],
@@ -252,6 +265,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         ...p,
         archiveStatus: p.archiveStatus || 'active',
         operationLogs: p.operationLogs || [],
+        households: (p.households || []).map((h: Household) => ({
+          ...h,
+          familyPopulation: h.familyPopulation || 3,
+        })),
         progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
           ...node,
           dailyLogs: node.dailyLogs || [],
@@ -274,6 +291,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       projectId,
       shareRatio: 0,
       shareAmount: 0,
+      familyPopulation: h.familyPopulation || 3,
     }));
 
     const newProject: Project = {
@@ -591,6 +609,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ...h,
             id: `h-${projectId}-import-${idx}-${Date.now()}`,
             projectId,
+            familyPopulation: h.familyPopulation || 3,
           })
         );
 
@@ -605,6 +624,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             area: h.area,
             ownerName: h.ownerName,
             phone: h.phone,
+            familyPopulation: h.familyPopulation || 3,
           })
         );
 

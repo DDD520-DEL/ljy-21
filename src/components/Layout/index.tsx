@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Building2, Home, Plus, Tag, Award } from 'lucide-react';
+import { Building2, Home, Plus, Tag, Award, Users } from 'lucide-react';
 import NotificationCenter from '@/components/NotificationCenter';
 
 export default function Layout() {
@@ -7,6 +7,7 @@ export default function Layout() {
   const isHome = location.pathname === '/';
   const isElevatorBrands = location.pathname === '/elevator-brands';
   const isPolicySubsidy = location.pathname === '/policy-subsidy';
+  const isResidentDirectory = location.pathname === '/resident-directory';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -56,6 +57,17 @@ export default function Layout() {
             >
               <Award className="w-4 h-4" />
               <span className="hidden sm:inline">政策补贴</span>
+            </Link>
+            <Link
+              to="/resident-directory"
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                isResidentDirectory
+                  ? 'bg-primary-50 text-primary-700'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              <span className="hidden sm:inline">居民通讯录</span>
             </Link>
             <Link
               to="/projects/create"
