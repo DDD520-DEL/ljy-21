@@ -321,3 +321,46 @@ export const OPERATION_TYPE_LABEL: Record<OperationType, string> = {
   restore: '项目恢复',
   status_change: '状态变更',
 };
+
+export interface ElevatorBrand {
+  id: string;
+  name: string;
+  country: string;
+  description: string;
+  logoUrl?: string;
+  models: ElevatorModel[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ElevatorModel {
+  id: string;
+  brandId: string;
+  modelName: string;
+  ratedLoad: number;
+  ratedSpeed: number;
+  minFloors: number;
+  maxFloors: number;
+  priceMin: number;
+  priceMax: number;
+  features: string[];
+  remarks?: string;
+}
+
+export const ELEVATOR_RATED_LOAD_OPTIONS = [
+  { value: 400, label: '400kg（4人）' },
+  { value: 630, label: '630kg（8人）' },
+  { value: 800, label: '800kg（10人）' },
+  { value: 1000, label: '1000kg（13人）' },
+  { value: 1250, label: '1250kg（16人）' },
+  { value: 1600, label: '1600kg（21人）' },
+];
+
+export const ELEVATOR_RATED_SPEED_OPTIONS = [
+  { value: 1.0, label: '1.0 m/s' },
+  { value: 1.5, label: '1.5 m/s' },
+  { value: 1.6, label: '1.6 m/s' },
+  { value: 1.75, label: '1.75 m/s' },
+  { value: 2.0, label: '2.0 m/s' },
+  { value: 2.5, label: '2.5 m/s' },
+];

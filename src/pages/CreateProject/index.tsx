@@ -1,11 +1,12 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Trash2, Building2, Users, Calculator, CheckCircle2, MapPin, Home, DollarSign, FileText, AlertCircle, Upload, Download, X, Check, AlertTriangle
+  ArrowLeft, Plus, Trash2, Building2, Users, Calculator, CheckCircle2, MapPin, Home, DollarSign, FileText, AlertCircle, Upload, Download, X, Check, AlertTriangle, ChevronDown, Info, Gauge, Layers, Zap, Tag
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
+import { useElevatorStore } from '@/store/elevatorStore';
 import { calculateShareRatio, formatCurrency } from '@/utils/feeCalculator';
-import type { Household } from '@/types';
+import type { Household, ElevatorBrand, ElevatorModel } from '@/types';
 import { maskName } from '@/utils/maskData';
 import { parseExcelFile, generateExcelTemplate } from '@/utils/excelImporter';
 import type { ImportResult } from '@/utils/excelImporter';
@@ -47,12 +48,57 @@ interface HouseholdForm {
 export default function CreateProject() {
   const navigate = useNavigate();
   const addProject = useProjectStore((s) => s.addProject);
+  const { brands, searchModels, initBrands } = useElevatorStore();
 
   const [currentStep, setCurrentStep] = useState<StepType>('basic');
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [totalFloors, setTotalFloors] = useState(6);
   const [totalCost, setTotalCost] = useState(45);
+
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+
+  useEffect(() => {
+    initBrands();
+  }, [initBrands]);
+
+  const selectedBrand = useMemo(() => {
+    if (!selectedBrandId) return null;
+    return brands.find((b) => b.id === selectedBrandId) || null;
+  }, [brands, selectedBrandId]);
+
+  const selectedModel = useMemo(() => {
+    if (!selectedModelId || !selectedBrandId) return null;
+    const brand = brands.find((b) => b.id === selectedBrandId);
+    return brand?.models.find((m) => m.id === selectedModelId) || null;
+  }, [brands, selectedBrandId, selectedModelId]);
+
+  const recommendedModels = useMemo(() => {
+    return searchModels({
+      minFloors: totalFloors,
+      maxFloors: totalFloors,
+    });
+  }, [searchModels, totalFloors]);
+
+  const handleBrandSelect = (brandId: string) => {
+    setSelectedBrandId(brandId);
+    setSelectedModelId(null);
+    setShowBrandDropdown(false);
+  };
+
+  const handleModelSelect = (model: ElevatorModel) => {
+    setSelectedModelId(model.id);
+    setTotalCost(model.priceMin + (model.priceMax - model.priceMin) / 2);
+    setShowModelDropdown(false);
+  };
+
+  const clearSelection = () => {
+    setSelectedBrandId(null);
+    setSelectedModelId(null);
+  };
 
   const [households, setHouseholds] = useState<HouseholdForm[]>([
     { floor: 1, unit: '101', area: 85, ownerName: '张**', phone: '138****8001' },
@@ -307,6 +353,216 @@ export default function CreateProject() {
                 />
               </div>
             </div>
+
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-3">
+                <label className="label-field !mb-0">
+                  <span className="flex items-center gap-1.5">
+                    <Tag className="w-4 h-4" />
+                    电梯品牌选型（可选）
+                  </span>
+                </label>
+                {(selectedBrandId || selectedModelId) && (
+                  <button
+                    onClick={clearSelection}
+                    className="text-xs text-slate-500 hover:text-primary-600 flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" />
+                    清除选择
+                  </button>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowBrandDropdown(!showBrandDropdown)}
+                    className="w-full input-field text-left flex items-center justify-between"
+                  >
+                    <span className={selectedBrand ? 'text-slate-800' : 'text-slate-400'}>
+                      {selectedBrand ? selectedBrand.name : '选择电梯品牌'}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 transition-transform ${
+                        showBrandDropdown ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {showBrandDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+                      {brands.map((brand) => (
+                        <button
+                          key={brand.id}
+                          type="button"
+                          onClick={() => handleBrandSelect(brand.id)}
+                          className={`w-full px-4 py-2.5 text-left hover:bg-primary-50 flex items-center justify-between transition-colors ${
+                            selectedBrandId === brand.id
+                              ? 'bg-primary-50 text-primary-700'
+                              : 'text-slate-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center">
+                              <Building2 className="w-4 h-4 text-primary-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm">{brand.name}</p>
+                              <p className="text-xs text-slate-500">{brand.country} · {brand.models.length} 个型号</p>
+                            </div>
+                          </div>
+                          {selectedBrandId === brand.id && (
+                            <Check className="w-4 h-4 text-primary-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => selectedBrandId && setShowModelDropdown(!showModelDropdown)}
+                    disabled={!selectedBrandId}
+                    className={`w-full input-field text-left flex items-center justify-between ${
+                      !selectedBrandId
+                        ? 'bg-slate-50 text-slate-400 cursor-not-allowed'
+                        : ''
+                    }`}
+                  >
+                    <span
+                      className={selectedModel ? 'text-slate-800' : 'text-slate-400'}
+                    >
+                      {selectedModel
+                        ? selectedModel.modelName
+                        : selectedBrandId
+                        ? '选择型号'
+                        : '请先选择品牌'}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 transition-transform ${
+                        showModelDropdown ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {showModelDropdown && selectedBrand && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 max-h-72 overflow-y-auto">
+                      {selectedBrand.models.map((model) => (
+                        <button
+                          key={model.id}
+                          type="button"
+                          onClick={() => handleModelSelect(model)}
+                          className={`w-full px-4 py-3 text-left hover:bg-primary-50 transition-colors ${
+                            selectedModelId === model.id
+                              ? 'bg-primary-50'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1.5">
+                            <p className="font-medium text-sm text-slate-800">
+                              {model.modelName}
+                            </p>
+                            <p className="text-sm font-semibold text-amber-600">
+                              {model.priceMin}-{model.priceMax}万
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Gauge className="w-3 h-3" />
+                              {model.ratedLoad}kg
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Zap className="w-3 h-3" />
+                              {model.ratedSpeed}m/s
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Layers className="w-3 h-3" />
+                              {model.minFloors}-{model.maxFloors}层
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {selectedModel && (
+                <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-100 animate-fade-in">
+                  <div className="flex items-start gap-3">
+                    <Info className="w-5 h-5 text-primary-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium text-primary-800 mb-2">
+                        已选择 {selectedBrand?.name} {selectedModel.modelName}
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <p className="text-primary-600">额定载重</p>
+                          <p className="font-medium text-primary-800">{selectedModel.ratedLoad}kg</p>
+                        </div>
+                        <div>
+                          <p className="text-primary-600">额定速度</p>
+                          <p className="font-medium text-primary-800">{selectedModel.ratedSpeed}m/s</p>
+                        </div>
+                        <div>
+                          <p className="text-primary-600">适用楼层</p>
+                          <p className="font-medium text-primary-800">{selectedModel.minFloors}-{selectedModel.maxFloors}层</p>
+                        </div>
+                        <div>
+                          <p className="text-primary-600">参考价格</p>
+                          <p className="font-medium text-amber-600">{selectedModel.priceMin}-{selectedModel.priceMax}万元</p>
+                        </div>
+                      </div>
+                      {selectedModel.features.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {selectedModel.features.map((feature, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 bg-white/60 text-primary-700 text-xs rounded-full border border-primary-200"
+                            >
+                              {feature}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {recommendedModels.length > 0 && !selectedModelId && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-1.5">
+                    <Info className="w-4 h-4 text-primary-500" />
+                    根据 {totalFloors} 层楼为您推荐以下型号：
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {recommendedModels.slice(0, 4).map(({ brand, model }) => (
+                      <button
+                        key={model.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedBrandId(brand.id);
+                          handleModelSelect(model);
+                        }}
+                        className="p-3 text-left bg-white border border-slate-200 rounded-lg hover:border-primary-300 hover:shadow-sm transition-all"
+                      >
+                        <p className="font-medium text-sm text-slate-800">
+                          {brand.name} {model.modelName}
+                        </p>
+                        <p className="text-xs text-amber-600 font-medium mt-0.5">
+                          {model.priceMin}-{model.priceMax}万元
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="p-4 bg-primary-50 rounded-lg border border-primary-100">
               <p className="text-sm text-primary-700">
                 费用将根据楼层自动计算各户分摊比例，一楼不分摊，二楼起按楼层系数递增
