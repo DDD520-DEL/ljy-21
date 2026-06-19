@@ -18,6 +18,7 @@ import {
   CalendarCheck,
   BookOpen,
   Megaphone,
+  CalendarDays,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -77,6 +78,7 @@ export default function ProjectLayout() {
     { to: `/projects/${id}/households`, label: '住户与费用', icon: Users },
     { to: `/projects/${id}/survey`, label: '意见征询', icon: Vote },
     { to: `/projects/${id}/feedbacks`, label: '反馈管理', icon: MessageSquare },
+    { to: `/projects/${id}/meetings`, label: '协调会议', icon: CalendarDays },
     { to: `/projects/${id}/progress`, label: '进度公示', icon: GanttChart },
     { to: `/projects/${id}/fund`, label: '资金看板', icon: Wallet },
     { to: `/projects/${id}/repair`, label: '报修工单', icon: Wrench, badge: pendingRepairCount },

@@ -36,6 +36,10 @@ import type {
   AdContract,
   HouseholdAdShare,
   YearlyAdRevenueSummary,
+  MeetingRecord,
+  MeetingAttendee,
+  MeetingResolution,
+  VoteResult,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL, DEFAULT_MAINTENANCE_INTERVAL } from '@/types';
@@ -44,7 +48,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 14;
+const CURRENT_VERSION = 15;
 
 interface HouseholdInput {
   floor: number;
@@ -244,6 +248,21 @@ interface ProjectStore {
   getYearlyAdRevenueSummary: (projectId: string, year: number) => YearlyAdRevenueSummary | null;
   getAllYearlyAdSummaries: (projectId: string) => YearlyAdRevenueSummary[];
   getHouseholdAdShareByYear: (projectId: string, householdId: string, year: number) => HouseholdAdShare | null;
+
+  addMeetingRecord: (projectId: string, data: {
+    meetingDate: string;
+    location: string;
+    host: string;
+    attendees: Omit<MeetingAttendee, 'id'>[];
+    topics: string[];
+    resolutions: Omit<MeetingResolution, 'id'>[];
+    notes?: string;
+  }) => MeetingRecord | null;
+  updateMeetingRecord: (projectId: string, recordId: string, data: Partial<MeetingRecord>) => void;
+  deleteMeetingRecord: (projectId: string, recordId: string) => void;
+  getProjectMeetingRecords: (projectId: string) => MeetingRecord[];
+  getMeetingRecordById: (projectId: string, recordId: string) => MeetingRecord | undefined;
+  getNodeRelatedMeetings: (projectId: string, nodeId: string) => MeetingRecord[];
 }
 
 function generateId(): string {
@@ -313,6 +332,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           elevatorConvention: p.elevatorConvention,
           conventionReadRecords: p.conventionReadRecords || [],
           adContracts: p.adContracts || [],
+          meetingRecords: p.meetingRecords || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -347,6 +367,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           elevatorConvention: p.elevatorConvention,
           conventionReadRecords: p.conventionReadRecords || [],
           adContracts: p.adContracts || [],
+          meetingRecords: p.meetingRecords || [],
         }));
         
         set({ projects });
@@ -375,6 +396,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ...node,
             dailyLogs: node.dailyLogs || [],
           })),
+          meetingRecords: p.meetingRecords || [],
         }));
         set({ projects: migratedProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedProjects));
@@ -408,6 +430,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           ...node,
           dailyLogs: node.dailyLogs || [],
         })),
+        meetingRecords: p.meetingRecords || [],
       }));
       set({ projects: migratedProjects });
     }
@@ -452,6 +475,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       elevatorArchives: [],
       maintenanceRecords: [],
       adContracts: [],
+      meetingRecords: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -2213,6 +2237,101 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     if (!summary) return null;
     return (
       summary.householdShares.find((s) => s.householdId === householdId) || null
+    );
+  },
+
+  addMeetingRecord: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const now = new Date().toISOString();
+    const attendees: MeetingAttendee[] = data.attendees.map((a) => ({
+      ...a,
+      id: generateId(),
+    }));
+    const resolutions: MeetingResolution[] = data.resolutions.map((r) => ({
+      ...r,
+      id: generateId(),
+    }));
+
+    const newRecord: MeetingRecord = {
+      id: generateId(),
+      projectId,
+      meetingDate: data.meetingDate,
+      location: data.location,
+      host: data.host,
+      attendees,
+      topics: data.topics,
+      resolutions,
+      notes: data.notes,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, meetingRecords: [...(p.meetingRecords || []), newRecord] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newRecord;
+  },
+
+  updateMeetingRecord: (projectId, recordId, data) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const records = (p.meetingRecords || []).map((record) => {
+          if (record.id === recordId) {
+            return { ...record, ...data, updatedAt: new Date().toISOString() };
+          }
+          return record;
+        });
+        return { ...p, meetingRecords: records };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  deleteMeetingRecord: (projectId, recordId) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          meetingRecords: (p.meetingRecords || []).filter((r) => r.id !== recordId),
+        };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getProjectMeetingRecords: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...(project.meetingRecords || [])].sort(
+      (a, b) => new Date(b.meetingDate).getTime() - new Date(a.meetingDate).getTime()
+    );
+  },
+
+  getMeetingRecordById: (projectId, recordId) => {
+    const project = get().getProject(projectId);
+    if (!project) return undefined;
+    return (project.meetingRecords || []).find((r) => r.id === recordId);
+  },
+
+  getNodeRelatedMeetings: (projectId, nodeId) => {
+    const records = get().getProjectMeetingRecords(projectId);
+    return records.filter((record) =>
+      record.resolutions.some((r) => r.relatedNodeIds.includes(nodeId))
     );
   },
 }));

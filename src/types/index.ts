@@ -207,6 +207,7 @@ export interface Project {
   elevatorConvention?: ElevatorConvention;
   conventionReadRecords?: ConventionReadRecord[];
   adContracts?: AdContract[];
+  meetingRecords?: MeetingRecord[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -650,4 +651,61 @@ export const AD_POSITION_OPTIONS = [
   { value: 'elevator_floor', label: '电梯地面' },
   { value: 'elevator_screen', label: '电梯电子屏' },
   { value: 'other', label: '其他位置' },
+];
+
+export type VoteResult = 'passed' | 'rejected' | 'pending';
+
+export interface MeetingAttendee {
+  id: string;
+  name: string;
+  floor?: number;
+  unit?: string;
+  role?: string;
+}
+
+export interface MeetingResolution {
+  id: string;
+  content: string;
+  voteResult: VoteResult;
+  agreeCount?: number;
+  opposeCount?: number;
+  abstainCount?: number;
+  relatedNodeIds: string[];
+  remarks?: string;
+}
+
+export interface MeetingRecord {
+  id: string;
+  projectId: string;
+  meetingDate: string;
+  location: string;
+  host: string;
+  attendees: MeetingAttendee[];
+  topics: string[];
+  resolutions: MeetingResolution[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const VOTE_RESULT_LABEL: Record<VoteResult, string> = {
+  passed: '表决通过',
+  rejected: '表决未通过',
+  pending: '待表决',
+};
+
+export const VOTE_RESULT_COLOR: Record<VoteResult, string> = {
+  passed: 'bg-green-100 text-green-700 border-green-300',
+  rejected: 'bg-red-100 text-red-700 border-red-300',
+  pending: 'bg-amber-100 text-amber-700 border-amber-300',
+};
+
+export const MEETING_ATTENDEE_ROLE_OPTIONS = [
+  { value: 'owner_rep', label: '业主代表' },
+  { value: 'community_staff', label: '社区工作人员' },
+  { value: 'construction', label: '施工方代表' },
+  { value: 'design', label: '设计方代表' },
+  { value: 'supervision', label: '监理方代表' },
+  { value: 'property', label: '物业代表' },
+  { value: 'other', label: '其他' },
 ];
