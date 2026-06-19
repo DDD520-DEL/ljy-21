@@ -21,6 +21,9 @@ import type {
   DelayApprovalStatus,
   DailyProgressLog,
   MaterialItem,
+  FundRecord,
+  FundRecordType,
+  MonthlyFundSummary,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
@@ -29,7 +32,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 9;
+const CURRENT_VERSION = 10;
 
 interface HouseholdInput {
   floor: number;
@@ -149,6 +152,20 @@ interface ProjectStore {
   }) => DailyProgressLog | null;
   deleteDailyLog: (projectId: string, nodeId: string, logId: string) => void;
   getNodeDailyLogs: (projectId: string, nodeId: string) => DailyProgressLog[];
+
+  addFundRecord: (projectId: string, data: {
+    type: FundRecordType;
+    category: string;
+    amount: number;
+    handler: string;
+    occurrenceDate: string;
+    description?: string;
+  }) => FundRecord | null;
+  updateFundRecord: (projectId: string, recordId: string, data: Partial<FundRecord>) => void;
+  deleteFundRecord: (projectId: string, recordId: string) => void;
+  getProjectFundRecords: (projectId: string) => FundRecord[];
+  getFundBalance: (projectId: string) => number;
+  getMonthlyFundSummaries: (projectId: string) => MonthlyFundSummary[];
 }
 
 function generateId(): string {
@@ -194,6 +211,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
+          fundRecords: p.fundRecords || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -216,6 +234,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           operationLogs: p.operationLogs || [],
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
+          fundRecords: p.fundRecords || [],
           progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
             ...node,
             mediaFiles: (node.mediaFiles || []).map((file: MediaFile) => ({
@@ -242,6 +261,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
+          fundRecords: p.fundRecords || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -265,6 +285,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         ...p,
         archiveStatus: p.archiveStatus || 'active',
         operationLogs: p.operationLogs || [],
+        feeObjections: p.feeObjections || [],
+        delayApplications: p.delayApplications || [],
+        surveyReminders: p.surveyReminders || [],
+        fundRecords: p.fundRecords || [],
         households: (p.households || []).map((h: Household) => ({
           ...h,
           familyPopulation: h.familyPopulation || 3,
@@ -312,6 +336,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       feeObjections: [],
       operationLogs: [],
       delayApplications: [],
+      fundRecords: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -1261,5 +1286,115 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     return [...logs].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
+  },
+
+  addFundRecord: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const now = new Date().toISOString();
+    const newRecord: FundRecord = {
+      id: generateId(),
+      projectId,
+      ...data,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, fundRecords: [...p.fundRecords, newRecord] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newRecord;
+  },
+
+  updateFundRecord: (projectId, recordId, data) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const records = p.fundRecords.map((r) => {
+          if (r.id === recordId) {
+            return { ...r, ...data, updatedAt: new Date().toISOString() };
+          }
+          return r;
+        });
+        return { ...p, fundRecords: records };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  deleteFundRecord: (projectId, recordId) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          fundRecords: p.fundRecords.filter((r) => r.id !== recordId),
+        };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getProjectFundRecords: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...project.fundRecords].sort(
+      (a, b) => new Date(b.occurrenceDate).getTime() - new Date(a.occurrenceDate).getTime()
+    );
+  },
+
+  getFundBalance: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return 0;
+    return project.fundRecords.reduce((sum, record) => {
+      return record.type === 'income' ? sum + record.amount : sum - record.amount;
+    }, 0);
+  },
+
+  getMonthlyFundSummaries: (projectId) => {
+    const records = get().getProjectFundRecords(projectId);
+    const monthMap = new Map<string, FundRecord[]>();
+
+    for (const record of records) {
+      const date = new Date(record.occurrenceDate);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthMap.has(monthKey)) {
+        monthMap.set(monthKey, []);
+      }
+      monthMap.get(monthKey)!.push(record);
+    }
+
+    const summaries: MonthlyFundSummary[] = [];
+    for (const [month, monthRecords] of monthMap.entries()) {
+      const totalIncome = monthRecords
+        .filter((r) => r.type === 'income')
+        .reduce((sum, r) => sum + r.amount, 0);
+      const totalExpense = monthRecords
+        .filter((r) => r.type === 'expense')
+        .reduce((sum, r) => sum + r.amount, 0);
+      summaries.push({
+        month,
+        totalIncome,
+        totalExpense,
+        netAmount: totalIncome - totalExpense,
+        records: monthRecords.sort(
+          (a, b) => new Date(b.occurrenceDate).getTime() - new Date(a.occurrenceDate).getTime()
+        ),
+      });
+    }
+
+    return summaries.sort((a, b) => b.month.localeCompare(a.month));
   },
 }));

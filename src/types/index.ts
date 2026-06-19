@@ -200,6 +200,7 @@ export interface Project {
   feeObjections: FeeObjection[];
   operationLogs: OperationLog[];
   delayApplications: DelayApplication[];
+  fundRecords?: FundRecord[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -413,3 +414,52 @@ export interface SubsidyPolicy {
   createdAt: string;
   updatedAt: string;
 }
+
+export type FundRecordType = 'income' | 'expense';
+
+export interface FundRecord {
+  id: string;
+  projectId: string;
+  type: FundRecordType;
+  category: string;
+  amount: number;
+  handler: string;
+  occurrenceDate: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonthlyFundSummary {
+  month: string;
+  totalIncome: number;
+  totalExpense: number;
+  netAmount: number;
+  records: FundRecord[];
+}
+
+export const FUND_RECORD_TYPE_LABEL: Record<FundRecordType, string> = {
+  income: '收入',
+  expense: '支出',
+};
+
+export const FUND_RECORD_TYPE_COLOR: Record<FundRecordType, string> = {
+  income: 'bg-green-100 text-green-700',
+  expense: 'bg-red-100 text-red-700',
+};
+
+export const FUND_INCOME_CATEGORIES = [
+  '业主集资',
+  '政府补贴',
+  '社会捐赠',
+  '其他收入',
+];
+
+export const FUND_EXPENSE_CATEGORIES = [
+  '设计费用',
+  '施工费用',
+  '设备采购',
+  '监理费用',
+  '审批费用',
+  '其他支出',
+];

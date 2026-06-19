@@ -13,6 +13,7 @@ import {
   RotateCcw,
   AlertTriangle,
   AlertCircle,
+  Wallet,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -56,6 +57,7 @@ export default function ProjectLayout() {
     { to: `/projects/${id}/survey`, label: '意见征询', icon: Vote },
     { to: `/projects/${id}/feedbacks`, label: '反馈管理', icon: MessageSquare },
     { to: `/projects/${id}/progress`, label: '进度公示', icon: GanttChart },
+    { to: `/projects/${id}/fund`, label: '资金看板', icon: Wallet },
   ];
 
   return (
