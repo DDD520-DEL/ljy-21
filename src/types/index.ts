@@ -151,6 +151,22 @@ export interface MediaFile {
   createdAt: string;
 }
 
+export interface MaterialItem {
+  name: string;
+  quantity: string;
+  unit?: string;
+}
+
+export interface DailyProgressLog {
+  id: string;
+  nodeId: string;
+  projectId: string;
+  contentSummary: string;
+  attendanceCount: number;
+  materials: MaterialItem[];
+  createdAt: string;
+}
+
 export interface ProgressNode {
   id: string;
   projectId: string;
@@ -160,6 +176,7 @@ export interface ProgressNode {
   date: string;
   status: NodeStatus;
   mediaFiles: MediaFile[];
+  dailyLogs: DailyProgressLog[];
 }
 
 export interface Project {

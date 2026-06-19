@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FileText,
   Gavel,
@@ -18,8 +18,13 @@ import {
   Image as ImageIcon,
   AlertTriangle,
   Clock3,
+  Plus,
+  X,
+  Users,
+  Package,
+  FileText as FileTextIcon,
 } from 'lucide-react';
-import type { Project, ProgressNode, MediaFile, DelayApplication } from '@/types';
+import type { Project, ProgressNode, MediaFile, DelayApplication, DailyProgressLog, MaterialItem } from '@/types';
 import {
   NODE_STATUS_LABEL,
   DELAY_APPROVAL_STATUS_LABEL,
@@ -58,6 +63,10 @@ export default function ProgressTimeline({
 
   const [delayModalOpen, setDelayModalOpen] = useState(false);
   const [selectedNode, setSelectedNode] = useState<ProgressNode | null>(null);
+
+  const addDailyLog = useProjectStore((s) => s.addDailyLog);
+  const deleteDailyLog = useProjectStore((s) => s.deleteDailyLog);
+  const getNodeDailyLogs = useProjectStore((s) => s.getNodeDailyLogs);
 
   const toggleNode = (id: string) => {
     setExpandedNode(expandedNode === id ? null : id);
@@ -143,6 +152,9 @@ export default function ProgressTimeline({
           editable={editable && node.status !== 'pending'}
           delayApplications={getNodeDelayApplications(project.id, node.id)}
           onRequestDelay={() => handleOpenDelayModal(node)}
+          dailyLogs={getNodeDailyLogs(project.id, node.id)}
+          onAddDailyLog={(data) => addDailyLog(project.id, node.id, data)}
+          onDeleteDailyLog={(logId) => deleteDailyLog(project.id, node.id, logId)}
         />
       ))}
 
@@ -175,6 +187,9 @@ interface TimelineNodeProps {
   editable: boolean;
   delayApplications: DelayApplication[];
   onRequestDelay: () => void;
+  dailyLogs: DailyProgressLog[];
+  onAddDailyLog: (data: { contentSummary: string; attendanceCount: number; materials: MaterialItem[] }) => void;
+  onDeleteDailyLog: (logId: string) => void;
 }
 
 function TimelineNode({
@@ -191,8 +206,17 @@ function TimelineNode({
   editable,
   delayApplications,
   onRequestDelay,
+  dailyLogs,
+  onAddDailyLog,
+  onDeleteDailyLog,
 }: TimelineNodeProps) {
   const IconComponent = STAGE_ICONS[node.stageKey] || FileText;
+
+  const [showLogForm, setShowLogForm] = useState(false);
+  const [logContent, setLogContent] = useState('');
+  const [logAttendance, setLogAttendance] = useState(0);
+  const [logMaterials, setLogMaterials] = useState<MaterialItem[]>([{ name: '', quantity: '', unit: '' }]);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
 
   const statusConfig = {
     completed: {
@@ -227,6 +251,63 @@ function TimelineNode({
     .reduce((sum, a) => sum + a.delayDays, 0);
 
   const hasDelay = delayApplications.length > 0;
+
+  const handleAddMaterial = () => {
+    setLogMaterials([...logMaterials, { name: '', quantity: '', unit: '' }]);
+  };
+
+  const handleRemoveMaterial = (index: number) => {
+    if (logMaterials.length > 1) {
+      setLogMaterials(logMaterials.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleMaterialChange = (index: number, field: keyof MaterialItem, value: string) => {
+    const newMaterials = [...logMaterials];
+    newMaterials[index] = { ...newMaterials[index], [field]: value };
+    setLogMaterials(newMaterials);
+  };
+
+  const handleSubmitLog = () => {
+    if (!logContent.trim()) return;
+
+    const validMaterials = logMaterials.filter((m) => m.name.trim() && m.quantity.trim());
+
+    onAddDailyLog({
+      contentSummary: logContent.trim(),
+      attendanceCount: logAttendance,
+      materials: validMaterials,
+    });
+
+    setLogContent('');
+    setLogAttendance(0);
+    setLogMaterials([{ name: '', quantity: '', unit: '' }]);
+    setShowLogForm(false);
+  };
+
+  const toggleDate = (dateStr: string) => {
+    const newExpanded = new Set(expandedDates);
+    if (newExpanded.has(dateStr)) {
+      newExpanded.delete(dateStr);
+    } else {
+      newExpanded.add(dateStr);
+    }
+    setExpandedDates(newExpanded);
+  };
+
+  const groupedLogs = useMemo(() => {
+    const groups: Record<string, DailyProgressLog[]> = {};
+    dailyLogs.forEach((log) => {
+      const dateStr = new Date(log.createdAt).toLocaleDateString('zh-CN');
+      if (!groups[dateStr]) {
+        groups[dateStr] = [];
+      }
+      groups[dateStr].push(log);
+    });
+    return Object.entries(groups).sort((a, b) =>
+      new Date(b[0]).getTime() - new Date(a[0]).getTime()
+    );
+  }, [dailyLogs]);
 
   return (
     <div className="relative pl-16">
@@ -424,6 +505,244 @@ function TimelineNode({
                 onDownloadFile={onDownloadFile}
               />
             )}
+
+            <div className="pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center">
+                    <FileTextIcon className="w-4 h-4 text-primary-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800 text-sm">每日进度日志</h4>
+                    <p className="text-xs text-slate-500">共 {dailyLogs.length} 条记录</p>
+                  </div>
+                </div>
+                {editable && node.status === 'in_progress' && (
+                  <button
+                    onClick={() => setShowLogForm(!showLogForm)}
+                    className="btn-primary !py-2 !px-4 text-sm inline-flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {showLogForm ? '取消' : '记录今日进度'}
+                  </button>
+                )}
+              </div>
+
+              {showLogForm && editable && node.status === 'in_progress' && (
+                <div className="mb-6 p-4 bg-primary-50/50 rounded-xl border border-primary-200 space-y-4">
+                  <div>
+                    <label className="label-field">今日施工内容摘要</label>
+                    <textarea
+                      value={logContent}
+                      onChange={(e) => setLogContent(e.target.value)}
+                      className="input-field min-h-[80px] resize-none"
+                      placeholder="请简要描述今日施工内容..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="label-field">出勤人数</label>
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
+                        <Users className="w-5 h-5 text-slate-600" />
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        value={logAttendance}
+                        onChange={(e) => setLogAttendance(Number(e.target.value))}
+                        className="input-field !w-32"
+                        placeholder="0"
+                      />
+                      <span className="text-sm text-slate-500">人</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="label-field mb-0">使用材料清单</label>
+                      <button
+                        onClick={handleAddMaterial}
+                        className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        添加材料
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {logMaterials.map((material, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                            <Package className="w-4 h-4 text-slate-600" />
+                          </div>
+                          <input
+                            type="text"
+                            value={material.name}
+                            onChange={(e) => handleMaterialChange(index, 'name', e.target.value)}
+                            className="input-field flex-1 text-sm"
+                            placeholder="材料名称"
+                          />
+                          <input
+                            type="text"
+                            value={material.quantity}
+                            onChange={(e) => handleMaterialChange(index, 'quantity', e.target.value)}
+                            className="input-field !w-24 text-sm"
+                            placeholder="数量"
+                          />
+                          <input
+                            type="text"
+                            value={material.unit || ''}
+                            onChange={(e) => handleMaterialChange(index, 'unit', e.target.value)}
+                            className="input-field !w-16 text-sm"
+                            placeholder="单位"
+                          />
+                          {logMaterials.length > 1 && (
+                            <button
+                              onClick={() => handleRemoveMaterial(index)}
+                              className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      onClick={() => {
+                        setShowLogForm(false);
+                        setLogContent('');
+                        setLogAttendance(0);
+                        setLogMaterials([{ name: '', quantity: '', unit: '' }]);
+                      }}
+                      className="btn-secondary"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleSubmitLog}
+                      disabled={!logContent.trim()}
+                      className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      保存日志
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {groupedLogs.length > 0 ? (
+                <div className="relative">
+                  <div className="absolute left-4 top-2 bottom-2 w-0.5 bg-slate-200" />
+                  <div className="space-y-2">
+                    {groupedLogs.map(([dateStr, logs], dateIndex) => (
+                      <div key={dateStr} className="relative pl-10">
+                        <div className="absolute left-2 -translate-x-1/2 w-5 h-5 rounded-full bg-primary-500 border-4 border-white shadow z-10 flex items-center justify-center">
+                          <div className="w-2 h-2 rounded-full bg-white" />
+                        </div>
+                        {dateIndex < groupedLogs.length - 1 && (
+                          <div className="absolute left-4 top-6 bottom-0 w-0.5 bg-slate-200" />
+                        )}
+
+                        <button
+                          onClick={() => toggleDate(dateStr)}
+                          className="w-full flex items-center justify-between py-2 hover:bg-slate-50 rounded-lg px-2 -mx-2 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-4 h-4 text-slate-500" />
+                            <span className="font-medium text-slate-700 text-sm">{dateStr}</span>
+                            <span className="text-xs text-slate-400">({logs.length} 条)</span>
+                          </div>
+                          {expandedDates.has(dateStr) ? (
+                            <ChevronUp className="w-4 h-4 text-slate-400" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-slate-400" />
+                          )}
+                        </button>
+
+                        {expandedDates.has(dateStr) && (
+                          <div className="mt-2 space-y-3">
+                            {logs.map((log) => (
+                              <div
+                                key={log.id}
+                                className="relative pl-6 pb-3"
+                              >
+                                <div className="absolute left-0 top-2 w-2 h-2 rounded-full bg-slate-300" />
+                                <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                                  <div className="flex items-start justify-between gap-4 mb-2">
+                                    <div className="flex items-center gap-2 text-xs text-slate-500">
+                                      <Clock className="w-3.5 h-3.5" />
+                                      {new Date(log.createdAt).toLocaleTimeString('zh-CN', {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </div>
+                                    {editable && (
+                                      <button
+                                        onClick={() => {
+                                          if (confirm('确定要删除这条日志吗？')) {
+                                            onDeleteDailyLog(log.id);
+                                          }
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                        title="删除日志"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <p className="text-sm text-slate-700 mb-3">{log.contentSummary}</p>
+
+                                  <div className="flex flex-wrap items-center gap-4 text-xs">
+                                    <div className="flex items-center gap-1.5 text-slate-600">
+                                      <Users className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>出勤 <strong className="text-slate-700">{log.attendanceCount}</strong> 人</span>
+                                    </div>
+                                  </div>
+
+                                  {log.materials.length > 0 && (
+                                    <div className="mt-3 pt-3 border-t border-slate-200/50">
+                                      <p className="text-xs text-slate-500 mb-2 flex items-center gap-1.5">
+                                        <Package className="w-3.5 h-3.5" />
+                                        材料清单
+                                      </p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {log.materials.map((mat, idx) => (
+                                          <span
+                                            key={idx}
+                                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded-md text-xs text-slate-600"
+                                          >
+                                            <span className="font-medium">{mat.name}</span>
+                                            <span className="text-slate-400">·</span>
+                                            <span>{mat.quantity}{mat.unit}</span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                    <FileTextIcon className="w-6 h-6 text-slate-400" />
+                  </div>
+                  <p className="text-sm text-slate-500">暂无进度日志</p>
+                  {editable && node.status === 'in_progress' && (
+                    <p className="text-xs text-slate-400 mt-1">点击上方按钮记录今日施工进度</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

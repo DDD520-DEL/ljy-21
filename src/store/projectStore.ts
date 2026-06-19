@@ -19,6 +19,8 @@ import type {
   FeeObjectionStatus,
   DelayApplication,
   DelayApprovalStatus,
+  DailyProgressLog,
+  MaterialItem,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
@@ -27,7 +29,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 8;
+const CURRENT_VERSION = 9;
 
 interface HouseholdInput {
   floor: number;
@@ -138,6 +140,14 @@ interface ProjectStore {
     approver: string;
     approvalComment?: string;
   }) => void;
+
+  addDailyLog: (projectId: string, nodeId: string, data: {
+    contentSummary: string;
+    attendanceCount: number;
+    materials: MaterialItem[];
+  }) => DailyProgressLog | null;
+  deleteDailyLog: (projectId: string, nodeId: string, logId: string) => void;
+  getNodeDailyLogs: (projectId: string, nodeId: string) => DailyProgressLog[];
 }
 
 function generateId(): string {
@@ -158,6 +168,7 @@ function initProgressNodes(projectId: string): ProgressNode[] {
     date: '',
     status: index === 0 ? 'in_progress' : 'pending',
     mediaFiles: [],
+    dailyLogs: [],
   }));
 }
 
@@ -182,6 +193,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
+          progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
+            ...node,
+            dailyLogs: node.dailyLogs || [],
+          })),
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -202,6 +217,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
               ...file,
               createdAt: file.createdAt || new Date().toISOString(),
             })),
+            dailyLogs: node.dailyLogs || [],
           })),
           surveyReminders: p.surveyReminders || [],
         }));
@@ -217,6 +233,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
+          progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
+            ...node,
+            dailyLogs: node.dailyLogs || [],
+          })),
         }));
         set({ projects: migratedProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedProjects));
@@ -232,6 +252,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         ...p,
         archiveStatus: p.archiveStatus || 'active',
         operationLogs: p.operationLogs || [],
+        progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
+          ...node,
+          dailyLogs: node.dailyLogs || [],
+        })),
       }));
       set({ projects: migratedProjects });
     }
@@ -1152,5 +1176,70 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         targetPath: `/projects/${projectId}/progress`,
       });
     }
+  },
+
+  addDailyLog: (projectId, nodeId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const newLog: DailyProgressLog = {
+      id: generateId(),
+      nodeId,
+      projectId,
+      contentSummary: data.contentSummary,
+      attendanceCount: data.attendanceCount,
+      materials: data.materials,
+      createdAt: new Date().toISOString(),
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const nodes = p.progressNodes.map((n) => {
+          if (n.id === nodeId) {
+            return { ...n, dailyLogs: [...n.dailyLogs, newLog] };
+          }
+          return n;
+        });
+        return { ...p, progressNodes: nodes };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newLog;
+  },
+
+  deleteDailyLog: (projectId, nodeId, logId) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const nodes = p.progressNodes.map((n) => {
+          if (n.id === nodeId) {
+            return {
+              ...n,
+              dailyLogs: n.dailyLogs.filter((l) => l.id !== logId),
+            };
+          }
+          return n;
+        });
+        return { ...p, progressNodes: nodes };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getNodeDailyLogs: (projectId, nodeId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    const node = project.progressNodes.find((n) => n.id === nodeId);
+    if (!node) return [];
+    const logs = node.dailyLogs || [];
+    return [...logs].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   },
 }));
