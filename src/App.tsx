@@ -16,6 +16,7 @@ import FundBoard from '@/pages/ProjectDetail/FundBoard';
 import RepairOrders from '@/pages/ProjectDetail/RepairOrders';
 import Maintenance from '@/pages/ProjectDetail/Maintenance';
 import Convention from '@/pages/ProjectDetail/Convention';
+import AdRevenue from '@/pages/ProjectDetail/AdRevenue';
 import PublicationPage from '@/pages/Publication';
 import { useProjectStore } from '@/store/projectStore';
 import { useElevatorStore } from '@/store/elevatorStore';
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="repair" element={<RepairOrders />} />
             <Route path="maintenance" element={<Maintenance />} />
             <Route path="convention" element={<Convention />} />
+            <Route path="ad-revenue" element={<AdRevenue />} />
           </Route>
       </Routes>
     </Router>

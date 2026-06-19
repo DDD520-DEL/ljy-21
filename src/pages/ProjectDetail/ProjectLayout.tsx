@@ -17,6 +17,7 @@ import {
   Wrench,
   CalendarCheck,
   BookOpen,
+  Megaphone,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -81,6 +82,7 @@ export default function ProjectLayout() {
     { to: `/projects/${id}/repair`, label: '报修工单', icon: Wrench, badge: pendingRepairCount },
     { to: `/projects/${id}/maintenance`, label: '维保记录', icon: CalendarCheck, show: hasArchive },
     { to: `/projects/${id}/convention`, label: '使用公约', icon: BookOpen, badge: conventionUnreadCount },
+    { to: `/projects/${id}/ad-revenue`, label: '广告收益', icon: Megaphone },
   ].filter((item) => item.show !== false);
 
   return (

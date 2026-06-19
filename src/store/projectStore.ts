@@ -33,6 +33,9 @@ import type {
   ReplacementPart,
   ElevatorConvention,
   ConventionReadRecord,
+  AdContract,
+  HouseholdAdShare,
+  YearlyAdRevenueSummary,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL, DEFAULT_MAINTENANCE_INTERVAL } from '@/types';
@@ -41,7 +44,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 13;
+const CURRENT_VERSION = 14;
 
 interface HouseholdInput {
   floor: number;
@@ -222,6 +225,25 @@ interface ProjectStore {
   getConventionReadCount: (projectId: string) => number;
   confirmConventionRead: (projectId: string, householdId: string) => ConventionReadRecord | null;
   hasHouseholdReadConvention: (projectId: string, householdId: string) => boolean;
+
+  addAdContract: (projectId: string, data: {
+    customerName: string;
+    contractAmount: number;
+    startDate: string;
+    endDate: string;
+    adPosition: string;
+    contactPerson?: string;
+    contactPhone?: string;
+    remarks?: string;
+  }) => AdContract | null;
+  updateAdContract: (projectId: string, contractId: string, data: Partial<AdContract>) => void;
+  deleteAdContract: (projectId: string, contractId: string) => void;
+  getProjectAdContracts: (projectId: string) => AdContract[];
+  getContractYearlyAllocation: (contract: AdContract, year: number) => number;
+  getAvailableAdYears: (projectId: string) => number[];
+  getYearlyAdRevenueSummary: (projectId: string, year: number) => YearlyAdRevenueSummary | null;
+  getAllYearlyAdSummaries: (projectId: string) => YearlyAdRevenueSummary[];
+  getHouseholdAdShareByYear: (projectId: string, householdId: string, year: number) => HouseholdAdShare | null;
 }
 
 function generateId(): string {
@@ -290,6 +312,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           })),
           elevatorConvention: p.elevatorConvention,
           conventionReadRecords: p.conventionReadRecords || [],
+          adContracts: p.adContracts || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -323,6 +346,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           })),
           elevatorConvention: p.elevatorConvention,
           conventionReadRecords: p.conventionReadRecords || [],
+          adContracts: p.adContracts || [],
         }));
         
         set({ projects });
@@ -342,6 +366,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           maintenanceRecords: p.maintenanceRecords || [],
           elevatorConvention: p.elevatorConvention,
           conventionReadRecords: p.conventionReadRecords || [],
+          adContracts: p.adContracts || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -372,6 +397,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         repairOrders: p.repairOrders || [],
         elevatorArchives: p.elevatorArchives || [],
         maintenanceRecords: p.maintenanceRecords || [],
+        elevatorConvention: p.elevatorConvention,
+        conventionReadRecords: p.conventionReadRecords || [],
+        adContracts: p.adContracts || [],
         households: (p.households || []).map((h: Household) => ({
           ...h,
           familyPopulation: h.familyPopulation || 3,
@@ -423,6 +451,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       repairOrders: [],
       elevatorArchives: [],
       maintenanceRecords: [],
+      adContracts: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -1974,6 +2003,216 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     if (!project?.elevatorConvention?.isPublished) return true;
     return (project.conventionReadRecords || []).some(
       (r) => r.householdId === householdId
+    );
+  },
+
+  addAdContract: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const now = new Date().toISOString();
+    const newContract: AdContract = {
+      id: generateId(),
+      projectId,
+      customerName: data.customerName,
+      contractAmount: data.contractAmount,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      adPosition: data.adPosition,
+      contactPerson: data.contactPerson,
+      contactPhone: data.contactPhone,
+      remarks: data.remarks,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, adContracts: [...(p.adContracts || []), newContract] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addNotification({
+      type: 'fee_updated',
+      projectId,
+      projectName: project.name,
+      title: '新增广告租赁合同',
+      description: `已登记与「${data.customerName}」的广告合同，金额 ${data.contractAmount} 元`,
+      targetPath: `/projects/${projectId}/ad-revenue`,
+    });
+
+    return newContract;
+  },
+
+  updateAdContract: (projectId, contractId, data) => {
+    const now = new Date().toISOString();
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const contracts = (p.adContracts || []).map((c) => {
+          if (c.id === contractId) {
+            return { ...c, ...data, updatedAt: now };
+          }
+          return c;
+        });
+        return { ...p, adContracts: contracts };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  deleteAdContract: (projectId, contractId) => {
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          adContracts: (p.adContracts || []).filter((c) => c.id !== contractId),
+        };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getProjectAdContracts: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...(project.adContracts || [])].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  getContractYearlyAllocation: (contract, year) => {
+    const start = new Date(contract.startDate);
+    const end = new Date(contract.endDate);
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31);
+
+    const overlapStart = start > yearStart ? start : yearStart;
+    const overlapEnd = end < yearEnd ? end : yearEnd;
+
+    if (overlapStart > overlapEnd) return 0;
+
+    const totalDays = Math.ceil(
+      (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)
+    ) + 1;
+    const overlapDays = Math.ceil(
+      (overlapEnd.getTime() - overlapStart.getTime()) / (24 * 60 * 60 * 1000)
+    ) + 1;
+
+    if (totalDays <= 0) return 0;
+
+    return Math.round((contract.contractAmount * overlapDays) / totalDays);
+  },
+
+  getAvailableAdYears: (projectId) => {
+    const contracts = get().getProjectAdContracts(projectId);
+    const years = new Set<number>();
+    const currentYear = new Date().getFullYear();
+
+    for (const contract of contracts) {
+      const startYear = new Date(contract.startDate).getFullYear();
+      const endYear = new Date(contract.endDate).getFullYear();
+      for (let y = startYear; y <= endYear; y++) {
+        years.add(y);
+      }
+    }
+
+    if (years.size === 0) {
+      years.add(currentYear);
+    }
+
+    return Array.from(years).sort((a, b) => b - a);
+  },
+
+  getYearlyAdRevenueSummary: (projectId, year) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const allContracts = get().getProjectAdContracts(projectId);
+    const yearContracts: AdContract[] = [];
+    let totalRevenue = 0;
+
+    for (const contract of allContracts) {
+      const yearlyAllocation = get().getContractYearlyAllocation(contract, year);
+      if (yearlyAllocation > 0) {
+        yearContracts.push(contract);
+        totalRevenue += yearlyAllocation;
+      }
+    }
+
+    const totalShareRatio = project.households.reduce(
+      (sum, h) => sum + h.shareRatio,
+      0
+    );
+
+    const householdShares: HouseholdAdShare[] = project.households.map((h) => {
+      const contractBreakdown: HouseholdAdShare['contractBreakdown'] = [];
+      let totalShare = 0;
+
+      for (const contract of yearContracts) {
+        const yearlyAllocation = get().getContractYearlyAllocation(contract, year);
+        const ratio = totalShareRatio > 0 ? h.shareRatio / totalShareRatio : 0;
+        const shareAmount = Math.round(yearlyAllocation * ratio);
+        totalShare += shareAmount;
+        contractBreakdown.push({
+          contractId: contract.id,
+          customerName: contract.customerName,
+          contractAmount: contract.contractAmount,
+          yearlyAllocation,
+          shareAmount,
+        });
+      }
+
+      return {
+        householdId: h.id,
+        householdName: h.ownerName,
+        floor: h.floor,
+        unit: h.unit,
+        area: h.area,
+        shareRatio: h.shareRatio,
+        shareAmount: totalShare,
+        contractBreakdown,
+      };
+    });
+
+    return {
+      year,
+      totalRevenue,
+      contractCount: yearContracts.length,
+      contracts: yearContracts,
+      householdShares: householdShares.sort((a, b) =>
+        a.floor - b.floor || a.unit.localeCompare(b.unit)
+      ),
+    };
+  },
+
+  getAllYearlyAdSummaries: (projectId) => {
+    const years = get().getAvailableAdYears(projectId);
+    const summaries: YearlyAdRevenueSummary[] = [];
+    for (const year of years) {
+      const summary = get().getYearlyAdRevenueSummary(projectId, year);
+      if (summary) {
+        summaries.push(summary);
+      }
+    }
+    return summaries;
+  },
+
+  getHouseholdAdShareByYear: (projectId, householdId, year) => {
+    const summary = get().getYearlyAdRevenueSummary(projectId, year);
+    if (!summary) return null;
+    return (
+      summary.householdShares.find((s) => s.householdId === householdId) || null
     );
   },
 }));

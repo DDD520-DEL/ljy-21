@@ -206,6 +206,7 @@ export interface Project {
   maintenanceRecords?: MaintenanceRecord[];
   elevatorConvention?: ElevatorConvention;
   conventionReadRecords?: ConventionReadRecord[];
+  adContracts?: AdContract[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -601,3 +602,52 @@ export interface ConventionReadRecord {
 }
 
 export const ELEVATOR_CONVENTION_DEFAULT_TITLE = '电梯使用公约';
+
+export interface AdContract {
+  id: string;
+  projectId: string;
+  customerName: string;
+  contractAmount: number;
+  startDate: string;
+  endDate: string;
+  adPosition: string;
+  contactPerson?: string;
+  contactPhone?: string;
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HouseholdAdShare {
+  householdId: string;
+  householdName: string;
+  floor: number;
+  unit: string;
+  area: number;
+  shareRatio: number;
+  shareAmount: number;
+  contractBreakdown: {
+    contractId: string;
+    customerName: string;
+    contractAmount: number;
+    yearlyAllocation: number;
+    shareAmount: number;
+  }[];
+}
+
+export interface YearlyAdRevenueSummary {
+  year: number;
+  totalRevenue: number;
+  contractCount: number;
+  contracts: AdContract[];
+  householdShares: HouseholdAdShare[];
+}
+
+export const AD_POSITION_OPTIONS = [
+  { value: 'elevator_inner_wall', label: '电梯轿厢内壁' },
+  { value: 'elevator_door', label: '电梯门' },
+  { value: 'elevator_ceiling', label: '电梯天花板' },
+  { value: 'elevator_floor', label: '电梯地面' },
+  { value: 'elevator_screen', label: '电梯电子屏' },
+  { value: 'other', label: '其他位置' },
+];
