@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   AlertCircle,
   Wallet,
+  Wrench,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -25,6 +26,7 @@ export default function ProjectLayout() {
   const archiveProject = useProjectStore((s) => s.archiveProject);
   const restoreProject = useProjectStore((s) => s.restoreProject);
   const getPendingFeeObjectionCount = useProjectStore((s) => s.getPendingFeeObjectionCount);
+  const getPendingRepairOrderCount = useProjectStore((s) => s.getPendingRepairOrderCount);
 
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
@@ -39,6 +41,7 @@ export default function ProjectLayout() {
   const canRestore = project.archiveStatus === 'archived';
 
   const pendingObjectionCount = id ? getPendingFeeObjectionCount(id) : 0;
+  const pendingRepairCount = id ? getPendingRepairOrderCount(id) : 0;
 
   const handleArchive = () => {
     archiveProject(project.id, '项目负责人');
@@ -58,6 +61,7 @@ export default function ProjectLayout() {
     { to: `/projects/${id}/feedbacks`, label: '反馈管理', icon: MessageSquare },
     { to: `/projects/${id}/progress`, label: '进度公示', icon: GanttChart },
     { to: `/projects/${id}/fund`, label: '资金看板', icon: Wallet },
+    { to: `/projects/${id}/repair`, label: '报修工单', icon: Wrench, badge: pendingRepairCount },
   ];
 
   return (
@@ -146,6 +150,28 @@ export default function ProjectLayout() {
             </Link>
           )}
 
+          {pendingRepairCount > 0 && (
+            <Link
+              to={`/projects/${id}/repair`}
+              className="mt-4 flex items-center gap-3 px-4 py-3 bg-red-500/90 hover:bg-red-500 text-white rounded-lg transition-colors backdrop-blur"
+            >
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <Wrench className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">
+                  您有 {pendingRepairCount} 条待处理的电梯报修工单
+                </p>
+                <p className="text-sm text-red-100">
+                  请及时安排维修人员处理电梯故障
+                </p>
+              </div>
+              <div className="bg-white text-red-600 px-3 py-1 rounded-full text-sm font-bold">
+                {pendingRepairCount} 条待处理
+              </div>
+            </Link>
+          )}
+
           <nav className="flex gap-1 mt-6 -mb-6 overflow-x-auto scrollbar-thin">
             {navItems.map((item) => (
               <NavLink
@@ -162,6 +188,11 @@ export default function ProjectLayout() {
               >
                 <item.icon className="w-4 h-4" />
                 {item.label}
+                {item.badge && item.badge > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs font-bold bg-red-500 text-white rounded-full min-w-[20px] text-center">
+                    {item.badge}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

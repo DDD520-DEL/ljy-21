@@ -24,6 +24,10 @@ import type {
   FundRecord,
   FundRecordType,
   MonthlyFundSummary,
+  RepairOrder,
+  RepairOrderStatus,
+  RepairPhoto,
+  FaultType,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
@@ -32,7 +36,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 10;
+const CURRENT_VERSION = 11;
 
 interface HouseholdInput {
   floor: number;
@@ -166,6 +170,27 @@ interface ProjectStore {
   getProjectFundRecords: (projectId: string) => FundRecord[];
   getFundBalance: (projectId: string) => number;
   getMonthlyFundSummaries: (projectId: string) => MonthlyFundSummary[];
+
+  addRepairOrder: (projectId: string, data: {
+    faultType: FaultType;
+    location: string;
+    description: string;
+    reporterName: string;
+    reporterPhone: string;
+  }) => RepairOrder | null;
+  updateRepairOrderStatus: (projectId: string, orderId: string, status: RepairOrderStatus, data?: {
+    assignee?: string;
+    repairNote?: string;
+  }) => void;
+  addRepairPhoto: (projectId: string, orderId: string, photo: Omit<RepairPhoto, 'id' | 'uploadedAt'>) => void;
+  getProjectRepairOrders: (projectId: string) => RepairOrder[];
+  getRepairOrderById: (projectId: string, orderId: string) => RepairOrder | undefined;
+  getPendingRepairOrderCount: (projectId: string) => number;
+  completeRepairOrder: (projectId: string, orderId: string, data: {
+    repairNote: string;
+    photos: Omit<RepairPhoto, 'id' | 'uploadedAt'>[];
+    assignee: string;
+  }) => void;
 }
 
 function generateId(): string {
@@ -174,6 +199,15 @@ function generateId(): string {
 
 function generateToken(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+function generateOrderNo(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `GD${year}${month}${day}${random}`;
 }
 
 function initProgressNodes(projectId: string): ProgressNode[] {
@@ -212,6 +246,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
           fundRecords: p.fundRecords || [],
+          repairOrders: p.repairOrders || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -262,6 +297,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           delayApplications: p.delayApplications || [],
           surveyReminders: p.surveyReminders || [],
           fundRecords: p.fundRecords || [],
+          repairOrders: p.repairOrders || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -337,6 +373,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       operationLogs: [],
       delayApplications: [],
       fundRecords: [],
+      repairOrders: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -1396,5 +1433,183 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
 
     return summaries.sort((a, b) => b.month.localeCompare(a.month));
+  },
+
+  addRepairOrder: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const now = new Date().toISOString();
+    const newOrder: RepairOrder = {
+      id: generateId(),
+      orderNo: generateOrderNo(),
+      projectId,
+      faultType: data.faultType,
+      location: data.location,
+      description: data.description,
+      reporterName: data.reporterName,
+      reporterPhone: data.reporterPhone,
+      status: 'pending',
+      completedPhotos: [],
+      createdAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, repairOrders: [...(p.repairOrders || []), newOrder] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addNotification({
+      type: 'fee_updated',
+      projectId,
+      projectName: project.name,
+      title: '新的电梯报修工单',
+      description: `工单 ${newOrder.orderNo}：${data.reporterName} 提交了电梯故障报修`,
+      targetPath: `/projects/${projectId}/repair`,
+    });
+
+    return newOrder;
+  },
+
+  updateRepairOrderStatus: (projectId, orderId, status, data) => {
+    const now = new Date().toISOString();
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const orders = (p.repairOrders || []).map((order) => {
+          if (order.id === orderId) {
+            const updates: Partial<RepairOrder> = { status, ...data };
+            if (status === 'processing' && !order.processingAt) {
+              updates.processingAt = now;
+            }
+            if (status === 'completed' && !order.completedAt) {
+              updates.completedAt = now;
+            }
+            return { ...order, ...updates };
+          }
+          return order;
+        });
+        return { ...p, repairOrders: orders };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    const project = get().getProject(projectId);
+    const order = project?.repairOrders?.find((o) => o.id === orderId);
+    if (order && project) {
+      const statusLabels: Record<RepairOrderStatus, string> = {
+        pending: '待处理',
+        processing: '处理中',
+        completed: '已修复',
+      };
+      get().addNotification({
+        type: 'fee_updated',
+        projectId,
+        projectName: project.name,
+        title: `报修工单状态更新`,
+        description: `工单 ${order.orderNo} 状态已更新为「${statusLabels[status]}」`,
+        targetPath: `/projects/${projectId}/repair`,
+      });
+    }
+  },
+
+  addRepairPhoto: (projectId, orderId, photo) => {
+    const newPhoto: RepairPhoto = {
+      ...photo,
+      id: generateId(),
+      uploadedAt: new Date().toISOString(),
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const orders = (p.repairOrders || []).map((order) => {
+          if (order.id === orderId) {
+            return {
+              ...order,
+              completedPhotos: [...order.completedPhotos, newPhoto],
+            };
+          }
+          return order;
+        });
+        return { ...p, repairOrders: orders };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  getProjectRepairOrders: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...(project.repairOrders || [])].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  },
+
+  getRepairOrderById: (projectId, orderId) => {
+    const project = get().getProject(projectId);
+    if (!project) return undefined;
+    return (project.repairOrders || []).find((o) => o.id === orderId);
+  },
+
+  getPendingRepairOrderCount: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return 0;
+    return (project.repairOrders || []).filter((o) => o.status === 'pending').length;
+  },
+
+  completeRepairOrder: (projectId, orderId, data) => {
+    const now = new Date().toISOString();
+    const photos: RepairPhoto[] = data.photos.map((p) => ({
+      ...p,
+      id: generateId(),
+      uploadedAt: now,
+    }));
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        const orders = (p.repairOrders || []).map((order) => {
+          if (order.id === orderId) {
+            return {
+              ...order,
+              status: 'completed' as RepairOrderStatus,
+              assignee: data.assignee,
+              repairNote: data.repairNote,
+              completedPhotos: photos,
+              completedAt: now,
+            };
+          }
+          return order;
+        });
+        return { ...p, repairOrders: orders };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    const project = get().getProject(projectId);
+    const order = project?.repairOrders?.find((o) => o.id === orderId);
+    if (order && project) {
+      get().addNotification({
+        type: 'fee_updated',
+        projectId,
+        projectName: project.name,
+        title: '报修工单已完成',
+        description: `工单 ${order.orderNo} 已修复完成，请确认`,
+        targetPath: `/projects/${projectId}/repair`,
+      });
+    }
   },
 }));

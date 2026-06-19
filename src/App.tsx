@@ -13,6 +13,7 @@ import SurveyPage from '@/pages/ProjectDetail/Survey';
 import FeedbacksPage from '@/pages/ProjectDetail/Feedbacks';
 import ProgressPage from '@/pages/ProjectDetail/Progress';
 import FundBoard from '@/pages/ProjectDetail/FundBoard';
+import RepairOrders from '@/pages/ProjectDetail/RepairOrders';
 import PublicationPage from '@/pages/Publication';
 import { useProjectStore } from '@/store/projectStore';
 import { useElevatorStore } from '@/store/elevatorStore';
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="feedbacks" element={<FeedbacksPage />} />
           <Route path="progress" element={<ProgressPage />} />
           <Route path="fund" element={<FundBoard />} />
+          <Route path="repair" element={<RepairOrders />} />
         </Route>
       </Routes>
     </Router>

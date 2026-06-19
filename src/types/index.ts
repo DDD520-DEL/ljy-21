@@ -201,6 +201,7 @@ export interface Project {
   operationLogs: OperationLog[];
   delayApplications: DelayApplication[];
   fundRecords?: FundRecord[];
+  repairOrders?: RepairOrder[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -462,4 +463,70 @@ export const FUND_EXPENSE_CATEGORIES = [
   '监理费用',
   '审批费用',
   '其他支出',
+];
+
+export type RepairOrderStatus = 'pending' | 'processing' | 'completed';
+
+export type FaultType =
+  | 'door_fault'
+  | 'lift_stuck'
+  | 'button_fault'
+  | 'light_fault'
+  | 'noise'
+  | 'other';
+
+export interface RepairPhoto {
+  id: string;
+  url: string;
+  name: string;
+  uploadedAt: string;
+  uploader: string;
+}
+
+export interface RepairOrder {
+  id: string;
+  orderNo: string;
+  projectId: string;
+  faultType: FaultType;
+  location: string;
+  description: string;
+  reporterName: string;
+  reporterPhone: string;
+  status: RepairOrderStatus;
+  assignee?: string;
+  repairNote?: string;
+  completedPhotos: RepairPhoto[];
+  createdAt: string;
+  processingAt?: string;
+  completedAt?: string;
+}
+
+export const FAULT_TYPE_LABEL: Record<FaultType, string> = {
+  door_fault: '门机故障',
+  lift_stuck: '电梯困人',
+  button_fault: '按钮故障',
+  light_fault: '照明故障',
+  noise: '运行异响',
+  other: '其他故障',
+};
+
+export const REPAIR_STATUS_LABEL: Record<RepairOrderStatus, string> = {
+  pending: '待处理',
+  processing: '处理中',
+  completed: '已修复',
+};
+
+export const REPAIR_STATUS_COLOR: Record<RepairOrderStatus, string> = {
+  pending: 'bg-amber-100 text-amber-700 border-amber-300',
+  processing: 'bg-blue-100 text-blue-700 border-blue-300',
+  completed: 'bg-green-100 text-green-700 border-green-300',
+};
+
+export const FAULT_TYPE_OPTIONS: { value: FaultType; label: string }[] = [
+  { value: 'door_fault', label: '门机故障（开关门异常）' },
+  { value: 'lift_stuck', label: '电梯困人（停运故障）' },
+  { value: 'button_fault', label: '按钮故障（楼层/开关）' },
+  { value: 'light_fault', label: '照明故障（轿厢/按钮灯）' },
+  { value: 'noise', label: '运行异响（异常噪音）' },
+  { value: 'other', label: '其他故障' },
 ];
