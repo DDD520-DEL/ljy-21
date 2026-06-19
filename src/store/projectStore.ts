@@ -28,15 +28,18 @@ import type {
   RepairOrderStatus,
   RepairPhoto,
   FaultType,
+  ElevatorArchive,
+  MaintenanceRecord,
+  ReplacementPart,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
-import { STAGE_LIST, PROJECT_STATUS_LABEL } from '@/types';
+import { STAGE_LIST, PROJECT_STATUS_LABEL, DEFAULT_MAINTENANCE_INTERVAL } from '@/types';
 import { calculateShareRatio } from '@/utils/feeCalculator';
 
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 11;
+const CURRENT_VERSION = 12;
 
 interface HouseholdInput {
   floor: number;
@@ -191,6 +194,23 @@ interface ProjectStore {
     photos: Omit<RepairPhoto, 'id' | 'uploadedAt'>[];
     assignee: string;
   }) => void;
+
+  createElevatorArchive: (projectId: string, data?: Partial<ElevatorArchive>) => ElevatorArchive | null;
+  getProjectElevatorArchives: (projectId: string) => ElevatorArchive[];
+  hasElevatorArchive: (projectId: string) => boolean;
+
+  addMaintenanceRecord: (projectId: string, data: {
+    maintenanceDate: string;
+    maintenanceCompany: string;
+    maintenanceContent: string;
+    replacementParts: Omit<ReplacementPart, 'id'>[];
+    technician: string;
+    nextMaintenanceDate: string;
+    remarks?: string;
+  }) => MaintenanceRecord | null;
+  getProjectMaintenanceRecords: (projectId: string) => MaintenanceRecord[];
+  getNextMaintenanceDate: (projectId: string) => string | null;
+  getUpcomingMaintenanceProjects: (daysAhead: number) => { project: Project; nextDate: string; daysLeft: number }[];
 }
 
 function generateId(): string {
@@ -247,6 +267,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           surveyReminders: p.surveyReminders || [],
           fundRecords: p.fundRecords || [],
           repairOrders: p.repairOrders || [],
+          elevatorArchives: p.elevatorArchives || [],
+          maintenanceRecords: p.maintenanceRecords || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -270,6 +292,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
           fundRecords: p.fundRecords || [],
+          repairOrders: p.repairOrders || [],
+          elevatorArchives: p.elevatorArchives || [],
+          maintenanceRecords: p.maintenanceRecords || [],
           progressNodes: (p.progressNodes || []).map((node: ProgressNode) => ({
             ...node,
             mediaFiles: (node.mediaFiles || []).map((file: MediaFile) => ({
@@ -298,6 +323,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           surveyReminders: p.surveyReminders || [],
           fundRecords: p.fundRecords || [],
           repairOrders: p.repairOrders || [],
+          elevatorArchives: p.elevatorArchives || [],
+          maintenanceRecords: p.maintenanceRecords || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -325,6 +352,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         delayApplications: p.delayApplications || [],
         surveyReminders: p.surveyReminders || [],
         fundRecords: p.fundRecords || [],
+        repairOrders: p.repairOrders || [],
+        elevatorArchives: p.elevatorArchives || [],
+        maintenanceRecords: p.maintenanceRecords || [],
         households: (p.households || []).map((h: Household) => ({
           ...h,
           familyPopulation: h.familyPopulation || 3,
@@ -374,6 +404,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       delayApplications: [],
       fundRecords: [],
       repairOrders: [],
+      elevatorArchives: [],
+      maintenanceRecords: [],
     };
 
     const newProjects = [...get().projects, newProject];
@@ -397,7 +429,38 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     const projects = get().projects.map((p) => {
       if (p.id === id) {
-        return { ...p, ...updates };
+        const updated = { ...p, ...updates };
+        if (status === 'completed' && (!p.elevatorArchives || p.elevatorArchives.length === 0)) {
+          const acceptanceDate = now;
+          const installationDate = new Date(new Date(now).getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          const nextMaintenanceDate = new Date(new Date(now).getTime() + DEFAULT_MAINTENANCE_INTERVAL * 30 * 24 * 60 * 60 * 1000).toISOString();
+          
+          updated.elevatorArchives = [{
+            id: generateId(),
+            projectId: id,
+            elevatorNo: `DT-${new Date(now).getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
+            brand: '通用电梯',
+            model: '标准型',
+            installationDate: installationDate.split('T')[0],
+            acceptanceDate: acceptanceDate.split('T')[0],
+            maintenanceIntervalMonths: DEFAULT_MAINTENANCE_INTERVAL,
+            createdAt: now,
+          }];
+          
+          updated.maintenanceRecords = [{
+            id: generateId(),
+            projectId: id,
+            maintenanceDate: acceptanceDate.split('T')[0],
+            maintenanceCompany: '默认维保单位',
+            maintenanceContent: '竣工验收及首次巡检：检查电梯安装质量，测试各项安全功能，确认运行正常。',
+            replacementParts: [],
+            technician: '验收专员',
+            nextMaintenanceDate: nextMaintenanceDate.split('T')[0],
+            remarks: '电梯验收合格，正式投入使用。首次维保将于3个月后进行。',
+            createdAt: now,
+          }];
+        }
+        return updated;
       }
       return p;
     });
@@ -1611,5 +1674,141 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         targetPath: `/projects/${projectId}/repair`,
       });
     }
+  },
+
+  createElevatorArchive: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const now = new Date().toISOString();
+    const newArchive: ElevatorArchive = {
+      id: generateId(),
+      projectId,
+      elevatorNo: data?.elevatorNo || `DT-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
+      brand: data?.brand || '通用电梯',
+      model: data?.model || '标准型',
+      installationDate: data?.installationDate || now.split('T')[0],
+      acceptanceDate: data?.acceptanceDate || now.split('T')[0],
+      maintenanceIntervalMonths: data?.maintenanceIntervalMonths || DEFAULT_MAINTENANCE_INTERVAL,
+      createdAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, elevatorArchives: [...(p.elevatorArchives || []), newArchive] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newArchive;
+  },
+
+  getProjectElevatorArchives: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return project.elevatorArchives || [];
+  },
+
+  hasElevatorArchive: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return false;
+    return (project.elevatorArchives?.length || 0) > 0;
+  },
+
+  addMaintenanceRecord: (projectId, data) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+
+    const now = new Date().toISOString();
+    const replacementParts: ReplacementPart[] = data.replacementParts.map((part) => ({
+      ...part,
+      id: generateId(),
+    }));
+
+    const newRecord: MaintenanceRecord = {
+      id: generateId(),
+      projectId,
+      maintenanceDate: data.maintenanceDate,
+      maintenanceCompany: data.maintenanceCompany,
+      maintenanceContent: data.maintenanceContent,
+      replacementParts,
+      technician: data.technician,
+      nextMaintenanceDate: data.nextMaintenanceDate,
+      remarks: data.remarks,
+      createdAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, maintenanceRecords: [...(p.maintenanceRecords || []), newRecord] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addNotification({
+      type: 'fee_updated',
+      projectId,
+      projectName: project.name,
+      title: '新增维保记录',
+      description: `已登记 ${data.maintenanceDate} 的电梯维保记录`,
+      targetPath: `/projects/${projectId}/maintenance`,
+    });
+
+    return newRecord;
+  },
+
+  getProjectMaintenanceRecords: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project) return [];
+    return [...(project.maintenanceRecords || [])].sort(
+      (a, b) => new Date(b.maintenanceDate).getTime() - new Date(a.maintenanceDate).getTime()
+    );
+  },
+
+  getNextMaintenanceDate: (projectId) => {
+    const records = get().getProjectMaintenanceRecords(projectId);
+    if (records.length === 0) {
+      const archives = get().getProjectElevatorArchives(projectId);
+      if (archives.length > 0 && archives[0].acceptanceDate) {
+        const acceptanceDate = new Date(archives[0].acceptanceDate);
+        const intervalMonths = archives[0].maintenanceIntervalMonths || DEFAULT_MAINTENANCE_INTERVAL;
+        const nextDate = new Date(acceptanceDate);
+        nextDate.setMonth(nextDate.getMonth() + intervalMonths);
+        return nextDate.toISOString().split('T')[0];
+      }
+      return null;
+    }
+    const latestRecord = records[0];
+    return latestRecord.nextMaintenanceDate;
+  },
+
+  getUpcomingMaintenanceProjects: (daysAhead) => {
+    const now = new Date();
+    const targetDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+
+    const upcoming: { project: Project; nextDate: string; daysLeft: number }[] = [];
+
+    for (const project of get().projects) {
+      if (project.status !== 'completed' || project.archiveStatus === 'archived') continue;
+      if ((project.elevatorArchives?.length || 0) === 0) continue;
+
+      const nextDateStr = get().getNextMaintenanceDate(project.id);
+      if (!nextDateStr) continue;
+
+      const nextDate = new Date(nextDateStr);
+      const daysLeft = Math.ceil((nextDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+
+      if (daysLeft <= daysAhead) {
+        upcoming.push({ project, nextDate: nextDateStr, daysLeft });
+      }
+    }
+
+    return upcoming.sort((a, b) => a.daysLeft - b.daysLeft);
   },
 }));

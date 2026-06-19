@@ -14,6 +14,7 @@ import FeedbacksPage from '@/pages/ProjectDetail/Feedbacks';
 import ProgressPage from '@/pages/ProjectDetail/Progress';
 import FundBoard from '@/pages/ProjectDetail/FundBoard';
 import RepairOrders from '@/pages/ProjectDetail/RepairOrders';
+import Maintenance from '@/pages/ProjectDetail/Maintenance';
 import PublicationPage from '@/pages/Publication';
 import { useProjectStore } from '@/store/projectStore';
 import { useElevatorStore } from '@/store/elevatorStore';
@@ -42,14 +43,15 @@ export default function App() {
         </Route>
         <Route path="/publication/:token" element={<PublicationPage />} />
         <Route path="/projects/:id" element={<ProjectLayout />}>
-          <Route index element={<ProjectOverview />} />
-          <Route path="households" element={<HouseholdsPage />} />
-          <Route path="survey" element={<SurveyPage />} />
-          <Route path="feedbacks" element={<FeedbacksPage />} />
-          <Route path="progress" element={<ProgressPage />} />
-          <Route path="fund" element={<FundBoard />} />
-          <Route path="repair" element={<RepairOrders />} />
-        </Route>
+            <Route index element={<ProjectOverview />} />
+            <Route path="households" element={<HouseholdsPage />} />
+            <Route path="survey" element={<SurveyPage />} />
+            <Route path="feedbacks" element={<FeedbacksPage />} />
+            <Route path="progress" element={<ProgressPage />} />
+            <Route path="fund" element={<FundBoard />} />
+            <Route path="repair" element={<RepairOrders />} />
+            <Route path="maintenance" element={<Maintenance />} />
+          </Route>
       </Routes>
     </Router>
   );

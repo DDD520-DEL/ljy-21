@@ -202,6 +202,8 @@ export interface Project {
   delayApplications: DelayApplication[];
   fundRecords?: FundRecord[];
   repairOrders?: RepairOrder[];
+  elevatorArchives?: ElevatorArchive[];
+  maintenanceRecords?: MaintenanceRecord[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -530,3 +532,45 @@ export const FAULT_TYPE_OPTIONS: { value: FaultType; label: string }[] = [
   { value: 'noise', label: '运行异响（异常噪音）' },
   { value: 'other', label: '其他故障' },
 ];
+
+export interface ReplacementPart {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  specification?: string;
+}
+
+export interface MaintenanceRecord {
+  id: string;
+  projectId: string;
+  maintenanceDate: string;
+  maintenanceCompany: string;
+  maintenanceContent: string;
+  replacementParts: ReplacementPart[];
+  technician: string;
+  nextMaintenanceDate: string;
+  remarks?: string;
+  createdAt: string;
+}
+
+export interface ElevatorArchive {
+  id: string;
+  projectId: string;
+  elevatorNo: string;
+  brand: string;
+  model: string;
+  installationDate: string;
+  acceptanceDate: string;
+  maintenanceIntervalMonths: number;
+  createdAt: string;
+}
+
+export const MAINTENANCE_INTERVAL_OPTIONS = [
+  { value: 1, label: '每月一次' },
+  { value: 3, label: '每季度一次' },
+  { value: 6, label: '每半年一次' },
+  { value: 12, label: '每年一次' },
+];
+
+export const DEFAULT_MAINTENANCE_INTERVAL = 3;

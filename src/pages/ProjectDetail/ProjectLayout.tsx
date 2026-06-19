@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Wallet,
   Wrench,
+  CalendarCheck,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -27,6 +28,8 @@ export default function ProjectLayout() {
   const restoreProject = useProjectStore((s) => s.restoreProject);
   const getPendingFeeObjectionCount = useProjectStore((s) => s.getPendingFeeObjectionCount);
   const getPendingRepairOrderCount = useProjectStore((s) => s.getPendingRepairOrderCount);
+  const getNextMaintenanceDate = useProjectStore((s) => s.getNextMaintenanceDate);
+  const hasElevatorArchive = useProjectStore((s) => s.hasElevatorArchive);
 
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
@@ -42,6 +45,14 @@ export default function ProjectLayout() {
 
   const pendingObjectionCount = id ? getPendingFeeObjectionCount(id) : 0;
   const pendingRepairCount = id ? getPendingRepairOrderCount(id) : 0;
+  const nextMaintenanceDate = id ? getNextMaintenanceDate(id) : null;
+  const hasArchive = id ? hasElevatorArchive(id) : false;
+
+  const daysUntilMaintenance = nextMaintenanceDate
+    ? Math.ceil((new Date(nextMaintenanceDate).getTime() - new Date().getTime()) / (24 * 60 * 60 * 1000))
+    : null;
+
+  const showMaintenanceWarning = hasArchive && daysUntilMaintenance !== null && daysUntilMaintenance <= 7;
 
   const handleArchive = () => {
     archiveProject(project.id, '项目负责人');
@@ -62,7 +73,8 @@ export default function ProjectLayout() {
     { to: `/projects/${id}/progress`, label: '进度公示', icon: GanttChart },
     { to: `/projects/${id}/fund`, label: '资金看板', icon: Wallet },
     { to: `/projects/${id}/repair`, label: '报修工单', icon: Wrench, badge: pendingRepairCount },
-  ];
+    { to: `/projects/${id}/maintenance`, label: '维保记录', icon: CalendarCheck, show: hasArchive },
+  ].filter((item) => item.show !== false);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -168,6 +180,36 @@ export default function ProjectLayout() {
               </div>
               <div className="bg-white text-red-600 px-3 py-1 rounded-full text-sm font-bold">
                 {pendingRepairCount} 条待处理
+              </div>
+            </Link>
+          )}
+
+          {showMaintenanceWarning && daysUntilMaintenance !== null && (
+            <Link
+              to={`/projects/${id}/maintenance`}
+              className={`mt-4 flex items-center gap-3 px-4 py-3 rounded-lg transition-colors backdrop-blur ${
+                daysUntilMaintenance < 0
+                  ? 'bg-red-500/90 hover:bg-red-500'
+                  : 'bg-amber-500/90 hover:bg-amber-500'
+              } text-white`}
+            >
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <CalendarCheck className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">
+                  {daysUntilMaintenance < 0
+                    ? '电梯维保已逾期！'
+                    : `电梯维保即将到期（还有 ${daysUntilMaintenance} 天）`}
+                </p>
+                <p className="text-sm text-white/80">
+                  {daysUntilMaintenance < 0
+                    ? `已逾期 ${Math.abs(daysUntilMaintenance)} 天，请尽快安排维保`
+                    : `下次维保日期：${nextMaintenanceDate}，请及时联系维保单位`}
+                </p>
+              </div>
+              <div className="bg-white text-amber-600 px-3 py-1 rounded-full text-sm font-bold">
+                {daysUntilMaintenance < 0 ? '已逾期' : `${daysUntilMaintenance}天后`}
               </div>
             </Link>
           )}

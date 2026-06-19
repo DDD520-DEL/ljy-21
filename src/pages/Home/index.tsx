@@ -10,10 +10,12 @@ import {
   Clock,
   Archive,
   AlertTriangle,
+  Wrench,
+  ChevronRight,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, ARCHIVE_STATUS_LABEL } from '@/types';
-import type { ProjectStatus, ArchiveStatus } from '@/types';
+import type { ProjectStatus, ArchiveStatus, Project } from '@/types';
 import ProjectCard from '@/components/ProjectCard';
 import StatsDashboard from '@/components/StatsDashboard';
 
@@ -47,6 +49,7 @@ export default function Home() {
   const projects = useProjectStore((s) => s.projects);
   const initProjects = useProjectStore((s) => s.initProjects);
   const checkPendingArchive = useProjectStore((s) => s.checkPendingArchive);
+  const getUpcomingMaintenanceProjects = useProjectStore((s) => s.getUpcomingMaintenanceProjects);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all');
@@ -54,6 +57,9 @@ export default function Home() {
   const [showPendingBanner, setShowPendingBanner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [dashboardExpanded, setDashboardExpanded] = useState(true);
+  const [upcomingMaintenance, setUpcomingMaintenance] = useState<
+    { project: Project; nextDate: string; daysLeft: number }[]
+  >([]);
 
   useEffect(() => {
     initProjects();
@@ -66,6 +72,11 @@ export default function Home() {
       setShowPendingBanner(true);
     }
   }, [checkPendingArchive, projects.length]);
+
+  useEffect(() => {
+    const upcoming = getUpcomingMaintenanceProjects(7);
+    setUpcomingMaintenance(upcoming);
+  }, [getUpcomingMaintenanceProjects, projects.length]);
 
   const filteredProjects = projects.filter((p) => {
     const matchSearch =
@@ -192,6 +203,51 @@ export default function Home() {
                 >
                   关闭
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {upcomingMaintenance.length > 0 && (
+        <div className="bg-blue-50 border-b border-blue-200">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <Wrench className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <span className="font-medium text-blue-800">
+                    有 {upcomingMaintenance.length} 部电梯维保即将到期
+                  </span>
+                  <span className="text-blue-600 text-sm ml-2">
+                    请及时安排维保工作，确保电梯安全运行
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-1 max-w-md">
+                  {upcomingMaintenance.slice(0, 2).map((item) => (
+                    <Link
+                      key={item.project.id}
+                      to={`/projects/${item.project.id}/maintenance`}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg text-sm hover:bg-blue-50 transition-colors border border-blue-100"
+                    >
+                      <span className="font-medium text-slate-700 truncate max-w-[150px]">
+                        {item.project.name}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        item.daysLeft <= 3
+                          ? 'bg-red-100 text-red-600'
+                          : 'bg-amber-100 text-amber-600'
+                      }`}>
+                        {item.daysLeft <= 0 ? `已逾期${Math.abs(item.daysLeft)}天` : `${item.daysLeft}天后`}
+                      </span>
+                      <ChevronRight className="w-3 h-3 text-slate-400" />
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
