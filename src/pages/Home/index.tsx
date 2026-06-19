@@ -18,6 +18,7 @@ import { PROJECT_STATUS_LABEL, ARCHIVE_STATUS_LABEL } from '@/types';
 import type { ProjectStatus, ArchiveStatus, Project } from '@/types';
 import ProjectCard from '@/components/ProjectCard';
 import StatsDashboard from '@/components/StatsDashboard';
+import FAQSection from '@/components/FAQSection';
 
 const STATUS_FILTERS: (ProjectStatus | 'all')[] = [
   'all',
@@ -354,6 +355,8 @@ export default function Home() {
           </div>
         )}
       </section>
+
+      <FAQSection />
     </div>
   );
 }
