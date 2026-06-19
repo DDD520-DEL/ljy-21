@@ -3,6 +3,7 @@ import type {
   Project,
   Household,
   SurveyResponse,
+  SurveyReminder,
   ProgressNode,
   MediaFile,
   ProjectStatus,
@@ -26,7 +27,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 7;
+const CURRENT_VERSION = 8;
 
 interface HouseholdInput {
   floor: number;
@@ -60,6 +61,11 @@ interface ProjectStore {
   updateProjectStatus: (id: string, status: ProjectStatus) => void;
 
   addSurveyResponse: (projectId: string, response: Omit<SurveyResponse, 'id' | 'projectId' | 'signedAt'>) => void;
+
+  batchRemind: (projectId: string, householdIds: string[]) => { success: number; skipped: number; skippedIds: string[] };
+  getHouseholdReminderCount: (projectId: string, householdId: string) => number;
+  getHouseholdLastReminder: (projectId: string, householdId: string) => string | null;
+  canRemindHousehold: (projectId: string, householdId: string) => boolean;
 
   updateProgressNode: (projectId: string, nodeId: string, data: Partial<ProgressNode>) => void;
   addMediaFile: (projectId: string, nodeId: string, file: Omit<MediaFile, 'id' | 'nodeId' | 'createdAt'>) => void;
@@ -175,6 +181,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           operationLogs: p.operationLogs || [],
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
+          surveyReminders: p.surveyReminders || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -196,6 +203,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
               createdAt: file.createdAt || new Date().toISOString(),
             })),
           })),
+          surveyReminders: p.surveyReminders || [],
         }));
         
         set({ projects });
@@ -208,6 +216,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           operationLogs: p.operationLogs || [],
           feeObjections: p.feeObjections || [],
           delayApplications: p.delayApplications || [],
+          surveyReminders: p.surveyReminders || [],
         }));
         set({ projects: migratedProjects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedProjects));
@@ -254,6 +263,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       createdAt: new Date().toISOString(),
       households,
       surveyResponses: [],
+      surveyReminders: [],
       progressNodes: initProgressNodes(projectId),
       publications: [],
       feedbacks: [],
@@ -361,6 +371,99 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     });
     set({ projects });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+  },
+
+  batchRemind: (projectId, householdIds) => {
+    const project = get().getProject(projectId);
+    if (!project) return { success: 0, skipped: 0, skippedIds: [] };
+
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const successIds: string[] = [];
+    const skippedIds: string[] = [];
+
+    const newReminders: SurveyReminder[] = [];
+
+    for (const householdId of householdIds) {
+      const hasResponse = project.surveyResponses.some(
+        (r) => r.householdId === householdId
+      );
+      if (hasResponse) {
+        skippedIds.push(householdId);
+        continue;
+      }
+
+      const lastReminder = project.surveyReminders
+        .filter((r) => r.householdId === householdId)
+        .sort((a, b) => new Date(b.remindedAt).getTime() - new Date(a.remindedAt).getTime())[0];
+
+      if (lastReminder && new Date(lastReminder.remindedAt) > twentyFourHoursAgo) {
+        skippedIds.push(householdId);
+        continue;
+      }
+
+      const newReminder: SurveyReminder = {
+        id: generateId(),
+        projectId,
+        householdId,
+        remindedAt: now.toISOString(),
+      };
+      newReminders.push(newReminder);
+      successIds.push(householdId);
+    }
+
+    if (newReminders.length > 0) {
+      const projects = get().projects.map((p) => {
+        if (p.id === projectId) {
+          return {
+            ...p,
+            surveyReminders: [...p.surveyReminders, ...newReminders],
+          };
+        }
+        return p;
+      });
+      set({ projects });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    }
+
+    return {
+      success: successIds.length,
+      skipped: skippedIds.length,
+      skippedIds,
+    };
+  },
+
+  getHouseholdReminderCount: (projectId, householdId) => {
+    const project = get().getProject(projectId);
+    if (!project) return 0;
+    return project.surveyReminders.filter((r) => r.householdId === householdId).length;
+  },
+
+  getHouseholdLastReminder: (projectId, householdId) => {
+    const project = get().getProject(projectId);
+    if (!project) return null;
+    const reminders = project.surveyReminders
+      .filter((r) => r.householdId === householdId)
+      .sort((a, b) => new Date(b.remindedAt).getTime() - new Date(a.remindedAt).getTime());
+    return reminders.length > 0 ? reminders[0].remindedAt : null;
+  },
+
+  canRemindHousehold: (projectId, householdId) => {
+    const project = get().getProject(projectId);
+    if (!project) return false;
+
+    const hasResponse = project.surveyResponses.some(
+      (r) => r.householdId === householdId
+    );
+    if (hasResponse) return false;
+
+    const lastReminder = get().getHouseholdLastReminder(projectId, householdId);
+    if (!lastReminder) return true;
+
+    const now = new Date();
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    return new Date(lastReminder) <= twentyFourHoursAgo;
   },
 
   updateProgressNode: (projectId, nodeId, data) => {

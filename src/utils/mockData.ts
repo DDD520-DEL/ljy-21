@@ -35,6 +35,7 @@ export const mockProjects: Project[] = [
       { id: 'r-007', projectId: 'proj-001', householdId: 'h-008', opinion: 'oppose', reason: '担心采光和噪音问题', signedAt: '2026-03-18T15:30:00Z' },
       { id: 'r-008', projectId: 'proj-001', householdId: 'h-011', opinion: 'agree', reason: '高楼层非常需要，强烈支持', signedAt: '2026-03-19T10:20:00Z' },
     ],
+    surveyReminders: [],
     progressNodes: [],
     publications: [
       {
@@ -165,6 +166,7 @@ export const mockProjects: Project[] = [
       { id: 'r-106', projectId: 'proj-002', householdId: 'h-106', opinion: 'agree', reason: '', signedAt: '2025-11-23T16:45:00Z' },
       { id: 'r-107', projectId: 'proj-002', householdId: 'h-107', opinion: 'agree', reason: '', signedAt: '2025-11-24T08:30:00Z' },
     ],
+    surveyReminders: [],
     progressNodes: [
       {
         id: 'n-101',
@@ -329,6 +331,7 @@ export const mockProjects: Project[] = [
       { id: 'h-206', projectId: 'proj-003', floor: 6, unit: '601', area: 92, ownerName: '史芳芳', phone: '13700137006', shareRatio: 14.64, shareAmount: 70272 },
     ],
     surveyResponses: [],
+    surveyReminders: [],
     progressNodes: [
       {
         id: 'n-201',
@@ -426,6 +429,7 @@ export const mockProjects: Project[] = [
       { id: 'h-308', projectId: 'proj-004', floor: 8, unit: '801', area: 88, ownerName: '周美玲', phone: '13600136008', shareRatio: 17, shareAmount: 98600 },
     ],
     surveyResponses: [],
+    surveyReminders: [],
     progressNodes: [
       {
         id: 'n-301',

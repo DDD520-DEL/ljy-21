@@ -135,6 +135,13 @@ export interface SurveyResponse {
   signedAt: string;
 }
 
+export interface SurveyReminder {
+  id: string;
+  projectId: string;
+  householdId: string;
+  remindedAt: string;
+}
+
 export interface MediaFile {
   id: string;
   nodeId: string;
@@ -168,6 +175,7 @@ export interface Project {
   archivedAt?: string;
   households: Household[];
   surveyResponses: SurveyResponse[];
+  surveyReminders: SurveyReminder[];
   progressNodes: ProgressNode[];
   publications: Publication[];
   feedbacks: Feedback[];
