@@ -114,11 +114,14 @@ function FaqItemCard({ item, isExpanded, onToggle, searchKeyword }: FaqItemCardP
           isExpanded ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="px-5 pb-5 pl-17 pt-0">
-          <div className="ml-12 pl-4 border-l-2 border-primary-100">
-            <p className="text-slate-600 leading-relaxed whitespace-pre-line text-[15px]">
-              {highlightText(item.answer, searchKeyword || '')}
-            </p>
+        <div className="px-5 pb-5">
+          <div className="relative">
+            <div className="absolute left-4 top-1 bottom-1 w-0.5 bg-gradient-to-b from-primary-200 via-primary-100 to-primary-50 rounded-full" />
+            <div className="ml-12">
+              <p className="text-slate-600 leading-relaxed whitespace-pre-line text-[15px]">
+                {highlightText(item.answer, searchKeyword || '')}
+              </p>
+            </div>
           </div>
         </div>
       </div>
