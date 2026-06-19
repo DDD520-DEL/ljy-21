@@ -31,6 +31,8 @@ import type {
   ElevatorArchive,
   MaintenanceRecord,
   ReplacementPart,
+  ElevatorConvention,
+  ConventionReadRecord,
 } from '@/types';
 import { mockProjects } from '@/utils/mockData';
 import { STAGE_LIST, PROJECT_STATUS_LABEL, DEFAULT_MAINTENANCE_INTERVAL } from '@/types';
@@ -39,7 +41,7 @@ import { calculateShareRatio } from '@/utils/feeCalculator';
 const STORAGE_KEY = 'elevator_projects';
 const STORAGE_VERSION_KEY = 'elevator_projects_version';
 const NOTIFICATION_STORAGE_KEY = 'elevator_notifications';
-const CURRENT_VERSION = 12;
+const CURRENT_VERSION = 13;
 
 interface HouseholdInput {
   floor: number;
@@ -211,6 +213,15 @@ interface ProjectStore {
   getProjectMaintenanceRecords: (projectId: string) => MaintenanceRecord[];
   getNextMaintenanceDate: (projectId: string) => string | null;
   getUpcomingMaintenanceProjects: (daysAhead: number) => { project: Project; nextDate: string; daysLeft: number }[];
+
+  saveConvention: (projectId: string, data: { title: string; content: string }) => ElevatorConvention;
+  publishConvention: (projectId: string, publisher: string) => ElevatorConvention | null;
+  getConvention: (projectId: string) => ElevatorConvention | undefined;
+  getConventionReadRecords: (projectId: string) => ConventionReadRecord[];
+  getConventionUnreadCount: (projectId: string) => number;
+  getConventionReadCount: (projectId: string) => number;
+  confirmConventionRead: (projectId: string, householdId: string) => ConventionReadRecord | null;
+  hasHouseholdReadConvention: (projectId: string, householdId: string) => boolean;
 }
 
 function generateId(): string {
@@ -277,6 +288,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ...node,
             dailyLogs: node.dailyLogs || [],
           })),
+          elevatorConvention: p.elevatorConvention,
+          conventionReadRecords: p.conventionReadRecords || [],
         }));
         set({ projects });
         localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
@@ -308,6 +321,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
           })),
+          elevatorConvention: p.elevatorConvention,
+          conventionReadRecords: p.conventionReadRecords || [],
         }));
         
         set({ projects });
@@ -325,6 +340,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           repairOrders: p.repairOrders || [],
           elevatorArchives: p.elevatorArchives || [],
           maintenanceRecords: p.maintenanceRecords || [],
+          elevatorConvention: p.elevatorConvention,
+          conventionReadRecords: p.conventionReadRecords || [],
           households: (p.households || []).map((h: Household) => ({
             ...h,
             familyPopulation: h.familyPopulation || 3,
@@ -1810,5 +1827,153 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
 
     return upcoming.sort((a, b) => a.daysLeft - b.daysLeft);
+  },
+
+  saveConvention: (projectId, data) => {
+    const now = new Date().toISOString();
+    const project = get().getProject(projectId);
+
+    let convention: ElevatorConvention;
+
+    if (project?.elevatorConvention) {
+      convention = {
+        ...project.elevatorConvention,
+        title: data.title,
+        content: data.content,
+        updatedAt: now,
+      };
+    } else {
+      convention = {
+        id: generateId(),
+        projectId,
+        title: data.title,
+        content: data.content,
+        isPublished: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, elevatorConvention: convention };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return convention;
+  },
+
+  publishConvention: (projectId, publisher) => {
+    const project = get().getProject(projectId);
+    if (!project?.elevatorConvention) return null;
+
+    const now = new Date().toISOString();
+    const convention: ElevatorConvention = {
+      ...project.elevatorConvention,
+      isPublished: true,
+      publishedAt: now,
+      publishedBy: publisher,
+      updatedAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return { ...p, elevatorConvention: convention, conventionReadRecords: [] };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    get().addNotification({
+      type: 'project_completed',
+      projectId,
+      projectName: project.name,
+      title: '电梯使用公约已发布',
+      description: `${project.name} 的电梯使用公约已发布，请住户及时阅读确认`,
+      targetPath: `/projects/${projectId}/convention`,
+    });
+
+    return convention;
+  },
+
+  getConvention: (projectId) => {
+    const project = get().getProject(projectId);
+    return project?.elevatorConvention;
+  },
+
+  getConventionReadRecords: (projectId) => {
+    const project = get().getProject(projectId);
+    return [...(project?.conventionReadRecords || [])].sort(
+      (a, b) => new Date(b.confirmedAt).getTime() - new Date(a.confirmedAt).getTime()
+    );
+  },
+
+  getConventionUnreadCount: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project?.elevatorConvention?.isPublished) return 0;
+    const readIds = new Set(
+      (project.conventionReadRecords || []).map((r) => r.householdId)
+    );
+    return project.households.filter((h) => !readIds.has(h.id)).length;
+  },
+
+  getConventionReadCount: (projectId) => {
+    const project = get().getProject(projectId);
+    if (!project?.elevatorConvention?.isPublished) return 0;
+    return (project.conventionReadRecords || []).length;
+  },
+
+  confirmConventionRead: (projectId, householdId) => {
+    const project = get().getProject(projectId);
+    if (!project?.elevatorConvention?.isPublished) return null;
+
+    const household = project.households.find((h) => h.id === householdId);
+    if (!household) return null;
+
+    const hasRead = (project.conventionReadRecords || []).some(
+      (r) => r.householdId === householdId
+    );
+    if (hasRead) return null;
+
+    const now = new Date().toISOString();
+    const newRecord: ConventionReadRecord = {
+      id: generateId(),
+      projectId,
+      conventionId: project.elevatorConvention.id,
+      householdId,
+      householdName: household.ownerName,
+      floor: household.floor,
+      unit: household.unit,
+      confirmedAt: now,
+    };
+
+    const projects = get().projects.map((p) => {
+      if (p.id === projectId) {
+        return {
+          ...p,
+          conventionReadRecords: [...(p.conventionReadRecords || []), newRecord],
+        };
+      }
+      return p;
+    });
+
+    set({ projects });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+
+    return newRecord;
+  },
+
+  hasHouseholdReadConvention: (projectId, householdId) => {
+    const project = get().getProject(projectId);
+    if (!project?.elevatorConvention?.isPublished) return true;
+    return (project.conventionReadRecords || []).some(
+      (r) => r.householdId === householdId
+    );
   },
 }));

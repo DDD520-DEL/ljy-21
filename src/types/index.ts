@@ -204,6 +204,8 @@ export interface Project {
   repairOrders?: RepairOrder[];
   elevatorArchives?: ElevatorArchive[];
   maintenanceRecords?: MaintenanceRecord[];
+  elevatorConvention?: ElevatorConvention;
+  conventionReadRecords?: ConventionReadRecord[];
 }
 
 export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -574,3 +576,28 @@ export const MAINTENANCE_INTERVAL_OPTIONS = [
 ];
 
 export const DEFAULT_MAINTENANCE_INTERVAL = 3;
+
+export interface ElevatorConvention {
+  id: string;
+  projectId: string;
+  title: string;
+  content: string;
+  isPublished: boolean;
+  publishedAt?: string;
+  publishedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConventionReadRecord {
+  id: string;
+  projectId: string;
+  conventionId: string;
+  householdId: string;
+  householdName: string;
+  floor: number;
+  unit: string;
+  confirmedAt: string;
+}
+
+export const ELEVATOR_CONVENTION_DEFAULT_TITLE = '电梯使用公约';

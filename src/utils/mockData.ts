@@ -587,6 +587,95 @@ export const mockProjects: Project[] = [
         createdAt: '2026-05-05T15:00:00Z',
       },
     ],
+    elevatorConvention: {
+      id: 'conv-003',
+      projectId: 'proj-003',
+      title: '电梯使用公约',
+      content: `一、电梯使用总则
+1. 电梯是全体业主的共有财产，每位住户都有爱护电梯的义务。
+2. 使用电梯时请遵守秩序，先下后上，文明乘梯。
+3. 电梯仅限载人及轻便物品使用，禁止运送超长、超重物品。
+
+二、安全使用须知
+1. 电梯运行中请勿将身体部位伸出轿厢外。
+2. 请勿在轿厢内蹦跳、打闹，以免影响电梯正常运行。
+3. 遇到电梯故障请勿惊慌，使用紧急呼叫按钮求助。
+4. 发生火灾或地震时禁止使用电梯。
+
+三、乘坐礼仪规范
+1. 主动照顾老人、孕妇、儿童和行动不便者。
+2. 请勿在轿厢内吸烟、吐痰、乱扔垃圾。
+3. 保持轿厢内安静，请勿大声喧哗。
+4. 请勿携带易燃易爆等危险物品乘坐电梯。
+
+四、儿童乘梯规定
+1. 儿童乘坐电梯须由成人陪同。
+2. 请勿让儿童在电梯口玩耍逗留。
+3. 教育孩子不要随意按动所有楼层按钮。
+
+五、货物搬运规定
+1. 搬运家具等大件物品请提前通知物业。
+2. 搬运货物时请注意保护电梯内壁和地面。
+3. 严禁超载使用电梯。
+
+六、维保与报修
+1. 电梯定期维保期间请配合绕行。
+2. 发现电梯异常请及时向物业或项目负责人反映。
+3. 请勿擅自拆卸或修理电梯部件。
+
+七、费用与责任
+1. 电梯日常运行及维保费用由全体业主共同承担。
+2. 人为损坏电梯照价赔偿。
+3. 违反使用规定造成的安全事故由责任人承担。
+`,
+      isPublished: true,
+      publishedAt: '2026-05-15T10:00:00Z',
+      publishedBy: '项目负责人',
+      createdAt: '2026-05-10T10:00:00Z',
+      updatedAt: '2026-05-15T10:00:00Z',
+    },
+    conventionReadRecords: [
+      {
+        id: 'cr-001',
+        projectId: 'proj-003',
+        conventionId: 'conv-003',
+        householdId: 'h-202',
+        householdName: '段秀兰',
+        floor: 2,
+        unit: '201',
+        confirmedAt: '2026-05-15T14:30:00Z',
+      },
+      {
+        id: 'cr-002',
+        projectId: 'proj-003',
+        conventionId: 'conv-003',
+        householdId: 'h-203',
+        householdName: '雷建华',
+        floor: 3,
+        unit: '301',
+        confirmedAt: '2026-05-16T09:15:00Z',
+      },
+      {
+        id: 'cr-003',
+        projectId: 'proj-003',
+        conventionId: 'conv-003',
+        householdId: 'h-204',
+        householdName: '龙丽娟',
+        floor: 4,
+        unit: '401',
+        confirmedAt: '2026-05-16T16:20:00Z',
+      },
+      {
+        id: 'cr-004',
+        projectId: 'proj-003',
+        conventionId: 'conv-003',
+        householdId: 'h-206',
+        householdName: '史芳芳',
+        floor: 6,
+        unit: '601',
+        confirmedAt: '2026-05-17T11:45:00Z',
+      },
+    ],
   },
   {
     id: 'proj-004',

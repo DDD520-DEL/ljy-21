@@ -16,6 +16,7 @@ import {
   Wallet,
   Wrench,
   CalendarCheck,
+  BookOpen,
 } from 'lucide-react';
 import { useProjectStore } from '@/store/projectStore';
 import { PROJECT_STATUS_LABEL, PROJECT_STATUS_COLOR, ARCHIVE_STATUS_LABEL, ARCHIVE_STATUS_COLOR } from '@/types';
@@ -30,6 +31,8 @@ export default function ProjectLayout() {
   const getPendingRepairOrderCount = useProjectStore((s) => s.getPendingRepairOrderCount);
   const getNextMaintenanceDate = useProjectStore((s) => s.getNextMaintenanceDate);
   const hasElevatorArchive = useProjectStore((s) => s.hasElevatorArchive);
+  const getConvention = useProjectStore((s) => s.getConvention);
+  const getConventionUnreadCount = useProjectStore((s) => s.getConventionUnreadCount);
 
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
@@ -47,12 +50,15 @@ export default function ProjectLayout() {
   const pendingRepairCount = id ? getPendingRepairOrderCount(id) : 0;
   const nextMaintenanceDate = id ? getNextMaintenanceDate(id) : null;
   const hasArchive = id ? hasElevatorArchive(id) : false;
+  const convention = id ? getConvention(id) : undefined;
+  const conventionUnreadCount = id ? getConventionUnreadCount(id) : 0;
 
   const daysUntilMaintenance = nextMaintenanceDate
     ? Math.ceil((new Date(nextMaintenanceDate).getTime() - new Date().getTime()) / (24 * 60 * 60 * 1000))
     : null;
 
   const showMaintenanceWarning = hasArchive && daysUntilMaintenance !== null && daysUntilMaintenance <= 7;
+  const showConventionWarning = convention?.isPublished && conventionUnreadCount > 0;
 
   const handleArchive = () => {
     archiveProject(project.id, '项目负责人');
@@ -74,6 +80,7 @@ export default function ProjectLayout() {
     { to: `/projects/${id}/fund`, label: '资金看板', icon: Wallet },
     { to: `/projects/${id}/repair`, label: '报修工单', icon: Wrench, badge: pendingRepairCount },
     { to: `/projects/${id}/maintenance`, label: '维保记录', icon: CalendarCheck, show: hasArchive },
+    { to: `/projects/${id}/convention`, label: '使用公约', icon: BookOpen, badge: conventionUnreadCount },
   ].filter((item) => item.show !== false);
 
   return (
@@ -210,6 +217,28 @@ export default function ProjectLayout() {
               </div>
               <div className="bg-white text-amber-600 px-3 py-1 rounded-full text-sm font-bold">
                 {daysUntilMaintenance < 0 ? '已逾期' : `${daysUntilMaintenance}天后`}
+              </div>
+            </Link>
+          )}
+
+          {showConventionWarning && (
+            <Link
+              to={`/projects/${id}/convention`}
+              className="mt-4 flex items-center gap-3 px-4 py-3 bg-violet-500/90 hover:bg-violet-500 text-white rounded-lg transition-colors backdrop-blur"
+            >
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold">
+                  电梯使用公约待阅读确认
+                </p>
+                <p className="text-sm text-white/80">
+                  还有 {conventionUnreadCount} 户住户未确认阅读，请及时通知住户
+                </p>
+              </div>
+              <div className="bg-white text-violet-600 px-3 py-1 rounded-full text-sm font-bold">
+                {conventionUnreadCount} 户待确认
               </div>
             </Link>
           )}
