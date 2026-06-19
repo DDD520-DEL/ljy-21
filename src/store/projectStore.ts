@@ -258,7 +258,10 @@ interface ProjectStore {
     resolutions: Omit<MeetingResolution, 'id'>[];
     notes?: string;
   }) => MeetingRecord | null;
-  updateMeetingRecord: (projectId: string, recordId: string, data: Partial<MeetingRecord>) => void;
+  updateMeetingRecord: (projectId: string, recordId: string, data: Partial<Omit<MeetingRecord, 'attendees' | 'resolutions'>> & {
+    attendees?: (Partial<MeetingAttendee> & { id?: string })[];
+    resolutions?: (Partial<MeetingResolution> & { id?: string })[];
+  }) => void;
   deleteMeetingRecord: (projectId: string, recordId: string) => void;
   getProjectMeetingRecords: (projectId: string) => MeetingRecord[];
   getMeetingRecordById: (projectId: string, recordId: string) => MeetingRecord | undefined;
@@ -2286,7 +2289,38 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       if (p.id === projectId) {
         const records = (p.meetingRecords || []).map((record) => {
           if (record.id === recordId) {
-            return { ...record, ...data, updatedAt: new Date().toISOString() };
+            let processedAttendees: MeetingAttendee[] = record.attendees;
+            if (data.attendees) {
+              processedAttendees = data.attendees.map((a) => ({
+                id: a.id || generateId(),
+                name: a.name,
+                role: a.role,
+                floor: a.floor,
+                unit: a.unit,
+              }));
+            }
+
+            let processedResolutions: MeetingResolution[] = record.resolutions;
+            if (data.resolutions) {
+              processedResolutions = data.resolutions.map((r) => ({
+                id: r.id || generateId(),
+                content: r.content,
+                voteResult: r.voteResult,
+                agreeCount: r.agreeCount,
+                opposeCount: r.opposeCount,
+                abstainCount: r.abstainCount,
+                relatedNodeIds: r.relatedNodeIds,
+                remarks: r.remarks,
+              }));
+            }
+
+            return {
+              ...record,
+              ...data,
+              attendees: processedAttendees,
+              resolutions: processedResolutions,
+              updatedAt: new Date().toISOString(),
+            };
           }
           return record;
         });

@@ -46,9 +46,9 @@ export default function MeetingRecordsPage() {
   const [meetingDate, setMeetingDate] = useState('');
   const [location, setLocation] = useState('');
   const [host, setHost] = useState('');
-  const [attendees, setAttendees] = useState<Omit<MeetingAttendee, 'id'>[]>([]);
+  const [attendees, setAttendees] = useState<(Omit<MeetingAttendee, 'id'> & { id?: string })[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
-  const [resolutions, setResolutions] = useState<Omit<MeetingResolution, 'id'>[]>([]);
+  const [resolutions, setResolutions] = useState<(Omit<MeetingResolution, 'id'> & { id?: string })[]>([]);
   const [notes, setNotes] = useState('');
 
   const [newAttendeeName, setNewAttendeeName] = useState('');
@@ -90,10 +90,17 @@ export default function MeetingRecordsPage() {
     setMeetingDate(record.meetingDate);
     setLocation(record.location);
     setHost(record.host);
-    setAttendees(record.attendees.map((a) => ({ name: a.name, role: a.role, floor: a.floor, unit: a.unit })));
+    setAttendees(record.attendees.map((a) => ({
+      id: a.id,
+      name: a.name,
+      role: a.role,
+      floor: a.floor,
+      unit: a.unit,
+    })));
     setTopics([...record.topics]);
     setResolutions(
       record.resolutions.map((r) => ({
+        id: r.id,
         content: r.content,
         voteResult: r.voteResult,
         agreeCount: r.agreeCount,
@@ -111,22 +118,13 @@ export default function MeetingRecordsPage() {
     if (!id || !meetingDate || !location || !host) return;
 
     if (editingRecord) {
-      const updatedAttendees = attendees.map((a, idx) => ({
-        ...editingRecord.attendees[idx],
-        ...a,
-      }));
-      const updatedResolutions = resolutions.map((r, idx) => ({
-        ...editingRecord.resolutions[idx],
-        ...r,
-      }));
-
       updateMeetingRecord(id, editingRecord.id, {
         meetingDate,
         location,
         host,
-        attendees: updatedAttendees,
+        attendees,
         topics,
-        resolutions: updatedResolutions,
+        resolutions,
         notes,
       });
     } else {
